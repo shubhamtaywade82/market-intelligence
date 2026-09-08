@@ -1,14 +1,20 @@
 import { Decimal } from 'decimal.js';
-import type { Candle, Timeframe } from '@nemesis-oss/market-events';
-import { detectFvg } from '@nemesis-oss/market-events';
+import type { Candle, Timeframe, BaseEvent } from '@nemesis-oss/market-events';
+import {
+  detectFvg,
+  detectSwings,
+  detectStructureBreaks,
+  detectOrderBlocks,
+  detectLiquiditySweeps
+} from '@nemesis-oss/market-events';
 import { evaluateFvgOutcome } from './fvg-outcomes.js';
+import { evaluateGenericOutcome } from './generic-outcomes.js';
 import type { ComponentStudyResult, EventOutcome } from './types.js';
 
-export interface RunFvgStudyOptions {
+export interface RunStudyOptions {
   readonly symbol: string;
   readonly timeframe: Timeframe;
   readonly horizonCandles?: number;
-  readonly defaultAtrMultiplier?: number;
 }
 
 function calculateSimpleAtr(candles: readonly Candle[], period: number = 14): Decimal {
@@ -33,37 +39,21 @@ function calculateMedian(values: number[]): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 0) {
-    return (sorted[mid - 1]! + sorted[mid]!) / 2;
-  }
-  return sorted[mid]!;
+  return sorted.length % 2 === 0 ? (sorted[mid - 1]! + sorted[mid]!) / 2 : sorted[mid]!;
 }
 
-/**
- * Executes a statistical research study on Fair Value Gaps across historical candles.
- */
-export function runFvgStudy(
-  candles: readonly Candle[],
-  options: RunFvgStudyOptions
+function buildStudyResult(
+  symbol: string,
+  timeframe: Timeframe,
+  eventType: string,
+  outcomes: readonly EventOutcome[]
 ): ComponentStudyResult {
-  const horizon = options.horizonCandles ?? 24;
-  const atr = calculateSimpleAtr(candles);
-  const events = detectFvg(candles, {
-    symbol: options.symbol,
-    timeframe: options.timeframe
-  });
-
-  const outcomes: EventOutcome[] = [];
-  for (const event of events) {
-    outcomes.push(evaluateFvgOutcome(candles, event, { horizonCandles: horizon, atr }));
-  }
-
   const sampleSize = outcomes.length;
   if (sampleSize === 0) {
     return {
-      symbol: options.symbol,
-      timeframe: options.timeframe,
-      eventType: 'fvg',
+      symbol,
+      timeframe,
+      eventType,
       sampleSize: 0,
       retestProbability: 0,
       fill25Rate: 0,
@@ -75,32 +65,61 @@ export function runFvgStudy(
     };
   }
 
-  const retestCount = outcomes.filter(o => o.firstTouchIndex !== null).length;
-  const fill25Count = outcomes.filter(o => o.touch25).length;
-  const fill50Count = outcomes.filter(o => o.touch50).length;
-  const fullFillCount = outcomes.filter(o => o.fullFill).length;
-  const hit1Count = outcomes.filter(o => o.hit1R).length;
-  const hit2Count = outcomes.filter(o => o.hit2R).length;
-  const hit3Count = outcomes.filter(o => o.hit3R).length;
-
-  const mfeAtrs = outcomes.map(o => o.mfeAtr.toNumber());
-  const maeAtrs = outcomes.map(o => o.maeAtr.toNumber());
-
   return {
-    symbol: options.symbol,
-    timeframe: options.timeframe,
-    eventType: 'fvg',
+    symbol,
+    timeframe,
+    eventType,
     sampleSize,
-    retestProbability: retestCount / sampleSize,
-    fill25Rate: fill25Count / sampleSize,
-    fill50Rate: fill50Count / sampleSize,
-    fullFillRate: fullFillCount / sampleSize,
-    medianMfeAtr: calculateMedian(mfeAtrs),
-    medianMaeAtr: calculateMedian(maeAtrs),
+    retestProbability: outcomes.filter(o => o.firstTouchIndex !== null).length / sampleSize,
+    fill25Rate: outcomes.filter(o => o.touch25).length / sampleSize,
+    fill50Rate: outcomes.filter(o => o.touch50).length / sampleSize,
+    fullFillRate: outcomes.filter(o => o.fullFill).length / sampleSize,
+    medianMfeAtr: calculateMedian(outcomes.map(o => o.mfeAtr.toNumber())),
+    medianMaeAtr: calculateMedian(outcomes.map(o => o.maeAtr.toNumber())),
     hitRates: {
-      r1: hit1Count / sampleSize,
-      r2: hit2Count / sampleSize,
-      r3: hit3Count / sampleSize
+      r1: outcomes.filter(o => o.hit1R).length / sampleSize,
+      r2: outcomes.filter(o => o.hit2R).length / sampleSize,
+      r3: outcomes.filter(o => o.hit3R).length / sampleSize
     }
   };
+}
+
+/**
+ * Runs study across all core detected primitives (FVG, OB, BOS, Liquidity Sweeps).
+ */
+export function runUniversalStudy(
+  candles: readonly Candle[],
+  options: RunStudyOptions
+): ComponentStudyResult[] {
+  const horizon = options.horizonCandles ?? 24;
+  const atr = calculateSimpleAtr(candles);
+  const { symbol, timeframe } = options;
+
+  // 1. FVG
+  const fvgs = detectFvg(candles, { symbol, timeframe });
+  const fvgOutcomes = fvgs.map(f => evaluateFvgOutcome(candles, f, { horizonCandles: horizon, atr }));
+  const fvgResult = buildStudyResult(symbol, timeframe, 'fvg', fvgOutcomes);
+
+  // 2. Swings & Structure
+  const swings = detectSwings(candles, { leftBars: 2, rightBars: 2 });
+  const breaks = detectStructureBreaks(candles, swings, { symbol, timeframe });
+  const bosOutcomes = breaks.map(b => evaluateGenericOutcome(candles, b, { horizonCandles: horizon, atr }));
+  const bosResult = buildStudyResult(symbol, timeframe, 'bos', bosOutcomes);
+
+  // 3. Order Blocks
+  const obs = detectOrderBlocks(candles, breaks, { symbol, timeframe });
+  const obOutcomes = obs.map(o => evaluateGenericOutcome(candles, o, { horizonCandles: horizon, atr }));
+  const obResult = buildStudyResult(symbol, timeframe, 'order_block', obOutcomes);
+
+  // 4. Sweeps
+  const sweeps = detectLiquiditySweeps(candles, swings, { symbol, timeframe });
+  const sweepOutcomes = sweeps.map(s => evaluateGenericOutcome(candles, s, { horizonCandles: horizon, atr }));
+  const sweepResult = buildStudyResult(symbol, timeframe, 'liquidity_sweep', sweepOutcomes);
+
+  return [fvgResult, bosResult, obResult, sweepResult];
+}
+
+export function runFvgStudy(candles: readonly Candle[], options: RunStudyOptions): ComponentStudyResult {
+  const all = runUniversalStudy(candles, options);
+  return all.find(r => r.eventType === 'fvg')!;
 }

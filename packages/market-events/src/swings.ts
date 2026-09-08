@@ -24,6 +24,11 @@ export function detectSwings(
       if (offset === 0) continue;
       const neighbor = candles[i + offset]!;
       if (neighbor.high.gte(candidate.high)) isHigh = false;
+    }
+
+    for (let offset = -leftBars; offset <= rightBars; offset++) {
+      if (offset === 0) continue;
+      const neighbor = candles[i + offset]!;
       if (neighbor.low.lte(candidate.low)) isLow = false;
     }
 

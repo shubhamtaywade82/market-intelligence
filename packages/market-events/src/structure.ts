@@ -17,16 +17,18 @@ export function detectStructureBreaks(
   const breaks: StructureBreakEvent[] = [];
   const requireClose = options.requireClose ?? true;
   let currentTrend: 'bullish' | 'bearish' | null = null;
+  const brokenSwingIds = new Set<string>();
 
   for (let i = 0; i < candles.length; i++) {
     const candle = candles[i]!;
-    // Only evaluate swings that are already confirmed by candle i
-    const activeSwings = swings.filter(s => s.confirmedAtIndex <= i);
+    // Only evaluate swings that are already confirmed by candle i and haven't been broken yet
+    const activeSwings = swings.filter(s => s.confirmedAtIndex <= i && !brokenSwingIds.has(s.id));
     const lastHigh = [...activeSwings].reverse().find(s => s.type === 'high');
     const lastLow = [...activeSwings].reverse().find(s => s.type === 'low');
 
     if (lastHigh && (requireClose ? candle.close.gt(lastHigh.price) : candle.high.gt(lastHigh.price))) {
       const isMss = currentTrend === 'bearish';
+      brokenSwingIds.add(lastHigh.id);
       breaks.push({
         id: `${options.symbol}-${options.timeframe}-${isMss ? 'mss' : 'bos'}-bull-${candle.timestamp}`,
         type: isMss ? 'mss' : 'bos',
@@ -42,6 +44,7 @@ export function detectStructureBreaks(
       currentTrend = 'bullish';
     } else if (lastLow && (requireClose ? candle.close.lt(lastLow.price) : candle.low.lt(lastLow.price))) {
       const isMss = currentTrend === 'bullish';
+      brokenSwingIds.add(lastLow.id);
       breaks.push({
         id: `${options.symbol}-${options.timeframe}-${isMss ? 'mss' : 'bos'}-bear-${candle.timestamp}`,
         type: isMss ? 'mss' : 'bos',
