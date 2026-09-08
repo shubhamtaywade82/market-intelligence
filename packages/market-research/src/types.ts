@@ -7,8 +7,8 @@ export interface Provenance {
   readonly detectorId: string;
   readonly detectorVersion: string;
   readonly detectorConfigHash: string;
+  readonly outcomeConfigHash: string;
   readonly outcomeVersion: string;
-  readonly outcomeDefinitionHash?: string | undefined;
 }
 
 export type FirstHitResult = 'target_first' | 'stop_first' | 'simultaneous_collision' | 'horizon_expired';
@@ -167,6 +167,12 @@ export interface ComponentStudyResult {
   readonly fullFillRate: number | null;
   readonly medianMfeAtr: number;
   readonly medianMaeAtr: number;
+  readonly reachRates: {
+    readonly r1: number;
+    readonly r2: number;
+    readonly r3: number;
+  };
+  /** @deprecated Use reachRates */
   readonly hitRates: {
     readonly r1: number;
     readonly r2: number;
@@ -216,6 +222,8 @@ export interface ResearchControlsInfo {
 }
 
 export interface ResearchDescriptiveStats {
+  readonly reachRates: { readonly r1: number; readonly r2: number; readonly r3: number };
+  /** @deprecated Use reachRates */
   readonly hitRates: { readonly r1: number; readonly r2: number; readonly r3: number };
   readonly medianMfeAtr: number;
   readonly medianMaeAtr: number;
@@ -290,4 +298,30 @@ export interface ResearchObservation {
   readonly context: ContextSnapshot;
   readonly outcome: EventOutcome;
   readonly provenance: Provenance;
+}
+
+export type ResamplingUnit = 'event' | 'pair' | 'episode' | 'day' | 'session';
+export type ResamplingMethod = 'bootstrap' | 'permutation';
+
+export interface ResamplingPlan {
+  readonly unit: ResamplingUnit;
+  readonly method: ResamplingMethod;
+  readonly iterations: number;
+  readonly seed?: number | undefined;
+}
+
+/**
+ * Fully reproducible experiment definition. Every hash here must be stable across runs
+ * given identical inputs — changing any config must produce a different hash.
+ */
+export interface ResearchExperiment {
+  readonly experimentId: string;
+  readonly datasetHash: string;
+  readonly detectorConfigHash: string;
+  readonly outcomeConfigHash: string;
+  readonly controlDefinitionHash: string;
+  readonly hypothesisDefinitionHash?: string | undefined;
+  readonly resamplingPlan: ResamplingPlan;
+  readonly softwareCommit?: string | undefined;
+  readonly createdAt: number;
 }
