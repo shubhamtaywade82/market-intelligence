@@ -9,5 +9,8 @@ export * from './conditional-probability.js';
 export * from './episode-clustering.js';
 export * from './walk-forward.js';
 export * from './equivalence-research.js';
+export * from './multi-timeframe.js';
+export * from './interactions.js';
+export * from './time-to-event.js';
 export * from './cli.js';
 export * from './data/index.js';
