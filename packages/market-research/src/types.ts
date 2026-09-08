@@ -1,19 +1,82 @@
 import { Decimal } from 'decimal.js';
 import type { BaseEvent, Timeframe } from '@nemesis-oss/market-events';
 
-export interface DirectionalOutcome {
+export interface Provenance {
+  readonly datasetId: string;
+  readonly datasetHash?: string | undefined;
+  readonly detectorId: string;
+  readonly detectorVersion: string;
+  readonly detectorConfigHash?: string | undefined;
+  readonly outcomeVersion: string;
+}
+
+export type FirstHitResult =
+  | 'target_first'
+  | 'stop_first'
+  | 'simultaneous_collision'
+  | 'horizon_expired';
+
+export type AmbiguityPolicy = 'pessimistic' | 'optimistic' | 'ambiguous';
+
+export interface OutcomeConfig {
+  readonly horizonCandles: number;
+  readonly targetR: number;
+  readonly stopAtrMultiplier: number;
+  readonly ambiguityPolicy: AmbiguityPolicy;
+}
+
+export interface BaseOutcome {
   readonly eventId: string;
   readonly horizonCandles: number;
   readonly mfe: Decimal;
   readonly mae: Decimal;
   readonly mfeAtr: Decimal;
   readonly maeAtr: Decimal;
+  readonly realizedR: Decimal;
+  readonly firstHit: FirstHitResult;
+  readonly timeToFirstHitBars: number;
+  readonly isAmbiguous: boolean;
   readonly hit1R: boolean;
   readonly hit2R: boolean;
   readonly hit3R: boolean;
 }
 
-export interface ZoneOutcome extends DirectionalOutcome {
+export interface DirectionalOutcome extends BaseOutcome {}
+
+export interface FvgOutcome extends BaseOutcome {
+  readonly firstTouchBars: number | null;
+  readonly firstTouchIndex: number | null;
+  readonly fill25: boolean;
+  readonly fill50: boolean;
+  readonly fill75: boolean;
+  readonly fill100: boolean;
+  readonly isMitigated: boolean;
+  readonly isInvalidated: boolean;
+}
+
+export interface OrderBlockOutcome extends BaseOutcome {
+  readonly firstTouchBars: number | null;
+  readonly maxPenetrationRatio: Decimal;
+  readonly isMitigated: boolean;
+  readonly isBreaker: boolean;
+}
+
+export interface StructureOutcome extends BaseOutcome {
+  readonly hasRetested: boolean;
+  readonly retestBars: number | null;
+  readonly isContinuation: boolean;
+  readonly nextBreakBars: number | null;
+}
+
+export interface LiquiditySweepOutcome extends BaseOutcome {
+  readonly isReclaimed: boolean;
+  readonly reclaimBars: number | null;
+  readonly postSweepDisplacementAtr: Decimal;
+  readonly oppositeLiquidityTaken: boolean;
+}
+
+// Backward-compatibility alias for zone outcome
+export interface ZoneOutcome extends FvgOutcome {
   readonly firstTouchIndex: number | null;
   readonly touch25: boolean;
   readonly touch50: boolean;
@@ -21,13 +84,28 @@ export interface ZoneOutcome extends DirectionalOutcome {
   readonly fullFill: boolean;
 }
 
-export type EventOutcome = ZoneOutcome | DirectionalOutcome;
+export type EventOutcome =
+  | DirectionalOutcome
+  | FvgOutcome
+  | OrderBlockOutcome
+  | StructureOutcome
+  | LiquiditySweepOutcome
+  | ZoneOutcome;
+
+export interface BootstrapConfidenceInterval {
+  readonly lower: number;
+  readonly upper: number;
+  readonly pointEstimate: number;
+  readonly standardError: number;
+}
 
 export interface ComponentStudyResult {
   readonly symbol: string;
   readonly timeframe: Timeframe;
   readonly eventType: string;
   readonly sampleSize: number;
+  readonly effectiveSampleSize?: number | undefined;
+  readonly clusterCount?: number | undefined;
   readonly retestProbability: number | null;
   readonly fill25Rate: number | null;
   readonly fill50Rate: number | null;
@@ -42,13 +120,16 @@ export interface ComponentStudyResult {
   readonly confidenceIntervalR2?: {
     readonly lower: number;
     readonly upper: number;
-  };
+  } | undefined;
+  readonly medianMfeAtrCi?: BootstrapConfidenceInterval | undefined;
   readonly baselineComparisonR2?: {
     readonly baselineProbability: number;
     readonly uplift: number;
     readonly isStatisticallySignificant: boolean;
     readonly pValueEstimate: number;
-  };
+    readonly oddsRatio?: number | undefined;
+    readonly relativeUplift?: number | undefined;
+  } | undefined;
 }
 
 export interface ContextSnapshot {
@@ -61,4 +142,5 @@ export interface ResearchObservation {
   readonly event: BaseEvent;
   readonly context: ContextSnapshot;
   readonly outcome: EventOutcome;
+  readonly provenance?: Provenance | undefined;
 }

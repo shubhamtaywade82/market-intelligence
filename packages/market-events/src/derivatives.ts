@@ -10,7 +10,7 @@ export interface DerivativesOptions {
 
 /**
  * Detects derivatives events: Open Interest shifts and extreme funding rates as objective observations
- * without imposing hardcoded directional trade bias.
+ * with exact quantitative measurements and without imposing directional dogma.
  */
 export function detectDerivativesEvents(
   snapshots: readonly DerivativesSnapshot[],
@@ -29,31 +29,21 @@ export function detectDerivativesEvents(
     if (prev.openInterest.gt(0)) {
       const oiChangeRatio = current.openInterest.minus(prev.openInterest).dividedBy(prev.openInterest);
 
-      if (oiChangeRatio.gte(oiThreshold)) {
+      if (oiChangeRatio.abs().gte(oiThreshold)) {
+        const isExpansion = oiChangeRatio.gt(0);
         events.push({
-          id: `${options.symbol}-${options.timeframe}-deriv-oi-exp-${current.timestamp}`,
+          id: `${options.symbol}-${options.timeframe}-deriv-${isExpansion ? 'oi-exp' : 'oi-cont'}-${current.timestamp}`,
           type: 'derivatives',
           symbol: options.symbol,
           timeframe: options.timeframe,
           detectedAt: current.timestamp,
           originIndex: i,
-          direction: 'bullish', // neutral/descriptive direction field preserved for schema compatibility
-          derivativesType: 'oi_expansion',
+          direction: isExpansion ? 'bullish' : 'bearish',
+          derivativesType: isExpansion ? 'oi_expansion' : 'oi_contraction',
           metricValue: current.openInterest,
-          baselineValue: prev.openInterest
-        });
-      } else if (oiChangeRatio.lte(oiThreshold.negated())) {
-        events.push({
-          id: `${options.symbol}-${options.timeframe}-deriv-oi-cont-${current.timestamp}`,
-          type: 'derivatives',
-          symbol: options.symbol,
-          timeframe: options.timeframe,
-          detectedAt: current.timestamp,
-          originIndex: i,
-          direction: 'bearish',
-          derivativesType: 'oi_contraction',
-          metricValue: current.openInterest,
-          baselineValue: prev.openInterest
+          baselineValue: prev.openInterest,
+          changePercentage: oiChangeRatio.times(100),
+          isObservationOnly: true
         });
       }
     }
@@ -67,10 +57,12 @@ export function detectDerivativesEvents(
         timeframe: options.timeframe,
         detectedAt: current.timestamp,
         originIndex: i,
-        direction: isPositive ? 'bullish' : 'bearish', // mirrors actual funding polarity, not subjective contrarian guess
+        direction: isPositive ? 'bullish' : 'bearish',
         derivativesType: 'funding_extreme',
         metricValue: current.fundingRate,
-        baselineValue: fundingExtreme
+        baselineValue: fundingExtreme,
+        changePercentage: new Decimal(0),
+        isObservationOnly: true
       });
     }
   }

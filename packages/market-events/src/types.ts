@@ -32,6 +32,7 @@ export interface FvgEvent extends BaseEvent {
 }
 
 export type SwingType = 'high' | 'low';
+export type SwingStrength = 'micro' | 'minor' | 'intermediate' | 'major' | 'external' | 'internal';
 
 export interface SwingPoint {
   readonly id: string;
@@ -40,6 +41,20 @@ export interface SwingPoint {
   readonly timestamp: number;
   readonly price: Decimal;
   readonly confirmedAtIndex: number;
+  readonly strength?: SwingStrength | undefined;
+}
+
+export type TrendState = 'bullish' | 'bearish' | 'sideways';
+export type TransitionState = 'continuation' | 'choch' | 'mss' | 'reversal';
+export type StructureLevel = 'internal' | 'external';
+
+export interface StructureState {
+  readonly trend: TrendState;
+  readonly transition: TransitionState;
+  readonly protectedHigh?: SwingPoint | undefined;
+  readonly protectedLow?: SwingPoint | undefined;
+  readonly lastConfirmedHigh?: SwingPoint | undefined;
+  readonly lastConfirmedLow?: SwingPoint | undefined;
 }
 
 export interface StructureBreakEvent extends BaseEvent {
@@ -47,6 +62,9 @@ export interface StructureBreakEvent extends BaseEvent {
   readonly brokenSwing: SwingPoint;
   readonly breakPrice: Decimal;
   readonly isCloseConfirmed: boolean;
+  readonly level?: StructureLevel | undefined;
+  readonly trendBeforeBreak?: TrendState | undefined;
+  readonly trendAfterBreak?: TrendState | undefined;
 }
 
 export interface OrderBlockEvent extends BaseEvent {
@@ -57,12 +75,43 @@ export interface OrderBlockEvent extends BaseEvent {
   readonly originCandleIndex: number;
 }
 
+export type LiquidityTargetType = 'bsl' | 'ssl';
+export type LiquidityPoolType =
+  | 'single_high'
+  | 'single_low'
+  | 'equal_highs'
+  | 'equal_lows'
+  | 'session_high'
+  | 'session_low'
+  | 'pdh'
+  | 'pdl'
+  | 'cluster';
+
+export type LiquidityPoolStatus = 'active' | 'swept' | 'mitigated' | 'invalidated';
+
+export interface LiquidityPool {
+  readonly poolId: string;
+  readonly price: Decimal;
+  readonly targetType: LiquidityTargetType;
+  readonly poolType: LiquidityPoolType;
+  readonly strength: SwingStrength | 'composite';
+  readonly formationTime: number;
+  readonly touchCount: number;
+  readonly source: string;
+  readonly status: LiquidityPoolStatus;
+  readonly sweptAtTimestamp?: number | undefined;
+  readonly sweptByIndex?: number | undefined;
+}
+
 export interface LiquiditySweepEvent extends BaseEvent {
   readonly type: 'liquidity_sweep';
   readonly sweptLevel: Decimal;
   readonly sweepExtreme: Decimal;
   readonly targetType: 'bsl' | 'ssl';
   readonly reclaimed: boolean;
+  readonly poolId?: string | undefined;
+  readonly poolType?: LiquidityPoolType | undefined;
+  readonly penetrationTicks?: Decimal | undefined;
 }
 
 export interface BreakerBlockEvent extends BaseEvent {
@@ -121,6 +170,8 @@ export interface DerivativesEvent extends BaseEvent {
   readonly derivativesType: DerivativesEventType;
   readonly metricValue: Decimal;
   readonly baselineValue: Decimal;
+  readonly changePercentage?: Decimal | undefined;
+  readonly isObservationOnly?: boolean | undefined;
 }
 
 export type WyckoffEventType =

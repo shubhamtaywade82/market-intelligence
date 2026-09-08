@@ -1,5 +1,5 @@
 import { Decimal } from 'decimal.js';
-import type { Candle, Timeframe } from '@nemesis-oss/market-events';
+import type { Candle, Timeframe, BaseEvent } from '@nemesis-oss/market-events';
 import {
   detectFvg,
   detectSwings,
@@ -7,32 +7,47 @@ import {
   detectOrderBlocks,
   detectLiquiditySweeps
 } from '@nemesis-oss/market-events';
-import { evaluateFvgOutcome } from './fvg-outcomes.js';
-import { evaluateGenericOutcome } from './generic-outcomes.js';
-import { calculateWilsonInterval, compareAgainstBaseline } from './statistical-significance.js';
-import type { ComponentStudyResult, DirectionalOutcome, ZoneOutcome } from './types.js';
+import {
+  evaluateEventOutcome,
+  DEFAULT_OUTCOME_CONFIG
+} from './outcome-evaluators.js';
+import { generateMatchedControls } from './matched-controls.js';
+import {
+  calculateWilsonInterval,
+  calculateBootstrapMedianCi,
+  compareAgainstBaseline
+} from './statistical-significance.js';
+import { clusterEventsIntoEpisodes } from './episode-clustering.js';
+import type {
+  ComponentStudyResult,
+  DirectionalOutcome,
+  EventOutcome,
+  FvgOutcome,
+  OutcomeConfig
+} from './types.js';
 
 export interface RunStudyOptions {
   readonly symbol: string;
   readonly timeframe: Timeframe;
-  readonly horizonCandles?: number;
+  readonly horizonCandles?: number | undefined;
+  readonly ambiguityPolicy?: 'pessimistic' | 'optimistic' | 'ambiguous' | undefined;
 }
 
-/**
- * Calculates causal, event-time ATR using only candles prior to or at index i.
- */
 export function calculateCausalAtr(candles: readonly Candle[], index: number, period: number = 14): Decimal {
-  if (index < 1) {
+  if (candles.length === 0) return new Decimal(1);
+  const clampedIdx = Math.min(candles.length - 1, Math.max(0, index));
+  if (clampedIdx < 1) {
     const c = candles[0];
     return c ? c.high.minus(c.low) : new Decimal(1);
   }
 
   const ranges: Decimal[] = [];
-  const start = Math.max(1, index - period + 1);
+  const start = Math.max(1, clampedIdx - period + 1);
 
-  for (let i = start; i <= index; i++) {
-    const c = candles[i]!;
-    const prev = candles[i - 1]!;
+  for (let i = start; i <= clampedIdx; i++) {
+    const c = candles[i];
+    const prev = candles[i - 1];
+    if (!c || !prev) continue;
     const tr1 = c.high.minus(c.low);
     const tr2 = c.high.minus(prev.close).abs();
     const tr3 = c.low.minus(prev.close).abs();
@@ -51,13 +66,6 @@ function calculateMedian(values: number[]): number {
   return sorted.length % 2 === 0 ? (sorted[mid - 1]! + sorted[mid]!) / 2 : sorted[mid]!;
 }
 
-function isZoneOutcome(outcome: DirectionalOutcome | ZoneOutcome): outcome is ZoneOutcome {
-  return 'touch25' in outcome && typeof outcome.touch25 === 'boolean';
-}
-
-/**
- * Evaluates an unconditional control baseline over a subset of regular candles (sampling every 5th bar).
- */
 export function evaluateBaselineControl(
   candles: readonly Candle[],
   horizon: number
@@ -66,130 +74,113 @@ export function evaluateBaselineControl(
   let total = 0;
 
   for (let i = 14; i < candles.length - horizon; i += 5) {
-    const atr = calculateCausalAtr(candles, i);
-    const outcome = evaluateGenericOutcome(candles, {
-      id: `baseline-${i}`,
-      type: 'baseline_control',
-      symbol: 'CONTROL',
-      timeframe: '15m',
-      detectedAt: candles[i]!.timestamp,
-      originIndex: i,
-      direction: 'bullish'
-    }, { horizonCandles: horizon, atr });
-
-    if (outcome.hit2R) hitsR2++;
+    const c = candles[i]!;
+    const next = candles[Math.min(candles.length - 1, i + horizon)]!;
+    const delta = next.close.minus(c.close);
+    if (delta.abs().gte(c.high.minus(c.low).times(2))) hitsR2++;
     total++;
   }
 
-  return { hitsR2, total };
+  return { hitsR2, total: Math.max(1, total) };
+}
+
+function evaluateStudyComponent(
+  symbol: string,
+  timeframe: Timeframe,
+  eventType: string,
+  events: readonly BaseEvent[],
+  candles: readonly Candle[],
+  config: OutcomeConfig
+): ComponentStudyResult {
+  const outcomes = events.map(ev => {
+    const atr = calculateCausalAtr(candles, ev.originIndex);
+    return evaluateEventOutcome(ev, candles, atr, config);
+  });
+
+  const controls = generateMatchedControls(events, candles, config);
+  const episodes = clusterEventsIntoEpisodes(events, { maxCandleGap: 3 });
+  const clusterSizes = episodes.map(ep => ep.eventsCount);
+
+  return buildStudyResult(symbol, timeframe, eventType, outcomes, controls.map(c => c.outcome), clusterSizes);
 }
 
 function buildStudyResult(
   symbol: string,
   timeframe: Timeframe,
   eventType: string,
-  outcomes: readonly (DirectionalOutcome | ZoneOutcome)[],
-  baseline: { hitsR2: number; total: number }
+  outcomes: readonly EventOutcome[],
+  controlOutcomes: readonly DirectionalOutcome[],
+  clusterSizes: readonly number[]
 ): ComponentStudyResult {
   const sampleSize = outcomes.length;
   if (sampleSize === 0) {
     return {
-      symbol,
-      timeframe,
-      eventType,
-      sampleSize: 0,
-      retestProbability: null,
-      fill25Rate: null,
-      fill50Rate: null,
-      fullFillRate: null,
-      medianMfeAtr: 0,
-      medianMaeAtr: 0,
-      hitRates: { r1: 0, r2: 0, r3: 0 }
+      symbol, timeframe, eventType, sampleSize: 0,
+      retestProbability: null, fill25Rate: null, fill50Rate: null, fullFillRate: null,
+      medianMfeAtr: 0, medianMaeAtr: 0, hitRates: { r1: 0, r2: 0, r3: 0 }
     };
   }
 
-  const zoneOutcomes = outcomes.filter(isZoneOutcome);
-  const isZoneType = zoneOutcomes.length === sampleSize;
+  const fvgOutcomes = outcomes.filter((o): o is FvgOutcome => 'fill25' in o);
+  const isFvg = fvgOutcomes.length === sampleSize;
 
   const hit1Count = outcomes.filter(o => o.hit1R).length;
   const hit2Count = outcomes.filter(o => o.hit2R).length;
   const hit3Count = outcomes.filter(o => o.hit3R).length;
+  const ctrlHitsR2 = controlOutcomes.filter(o => o.hit2R).length;
 
   const intervalR2 = calculateWilsonInterval(hit2Count, sampleSize);
-  const baselineStats = compareAgainstBaseline(hit2Count, sampleSize, baseline.hitsR2, baseline.total);
+  const mfeValues = outcomes.map(o => o.mfeAtr.toNumber());
+  const medianMfeCi = calculateBootstrapMedianCi(mfeValues);
+  const baselineStats = compareAgainstBaseline(hit2Count, sampleSize, ctrlHitsR2, controlOutcomes.length, clusterSizes);
 
   return {
-    symbol,
-    timeframe,
-    eventType,
-    sampleSize,
-    retestProbability: isZoneType ? zoneOutcomes.filter(o => o.firstTouchIndex !== null).length / sampleSize : null,
-    fill25Rate: isZoneType ? zoneOutcomes.filter(o => o.touch25).length / sampleSize : null,
-    fill50Rate: isZoneType ? zoneOutcomes.filter(o => o.touch50).length / sampleSize : null,
-    fullFillRate: isZoneType ? zoneOutcomes.filter(o => o.fullFill).length / sampleSize : null,
-    medianMfeAtr: calculateMedian(outcomes.map(o => o.mfeAtr.toNumber())),
+    symbol, timeframe, eventType, sampleSize,
+    effectiveSampleSize: baselineStats.effectiveSampleSize,
+    clusterCount: clusterSizes.length,
+    retestProbability: isFvg ? fvgOutcomes.filter(o => o.firstTouchBars !== null).length / sampleSize : null,
+    fill25Rate: isFvg ? fvgOutcomes.filter(o => o.fill25).length / sampleSize : null,
+    fill50Rate: isFvg ? fvgOutcomes.filter(o => o.fill50).length / sampleSize : null,
+    fullFillRate: isFvg ? fvgOutcomes.filter(o => o.fill100).length / sampleSize : null,
+    medianMfeAtr: calculateMedian(mfeValues),
     medianMaeAtr: calculateMedian(outcomes.map(o => o.maeAtr.toNumber())),
-    hitRates: {
-      r1: hit1Count / sampleSize,
-      r2: hit2Count / sampleSize,
-      r3: hit3Count / sampleSize
-    },
-    confidenceIntervalR2: {
-      lower: intervalR2.lower,
-      upper: intervalR2.upper
-    },
+    medianMfeAtrCi: medianMfeCi,
+    hitRates: { r1: hit1Count / sampleSize, r2: hit2Count / sampleSize, r3: hit3Count / sampleSize },
+    confidenceIntervalR2: { lower: intervalR2.lower, upper: intervalR2.upper },
     baselineComparisonR2: {
       baselineProbability: baselineStats.baselineProbability,
       uplift: baselineStats.uplift,
+      relativeUplift: baselineStats.relativeUplift,
+      oddsRatio: baselineStats.oddsRatio,
       isStatisticallySignificant: baselineStats.isStatisticallySignificant,
       pValueEstimate: baselineStats.pValueEstimate
     }
   };
 }
 
-/**
- * Runs study across detected components using causal event-time ATR and baseline control comparison.
- */
 export function runUniversalStudy(
   candles: readonly Candle[],
   options: RunStudyOptions
 ): ComponentStudyResult[] {
-  const horizon = options.horizonCandles ?? 24;
+  const config: OutcomeConfig = {
+    ...DEFAULT_OUTCOME_CONFIG,
+    horizonCandles: options.horizonCandles ?? 24,
+    ambiguityPolicy: options.ambiguityPolicy ?? 'pessimistic'
+  };
   const { symbol, timeframe } = options;
-  const baseline = evaluateBaselineControl(candles, horizon);
 
-  // 1. FVG
   const fvgs = detectFvg(candles, { symbol, timeframe });
-  const fvgOutcomes = fvgs.map(f => {
-    const atr = calculateCausalAtr(candles, f.originIndex);
-    return evaluateFvgOutcome(candles, f, { horizonCandles: horizon, atr });
-  });
-  const fvgResult = buildStudyResult(symbol, timeframe, 'fvg', fvgOutcomes, baseline);
+  const fvgResult = evaluateStudyComponent(symbol, timeframe, 'fvg', fvgs, candles, config);
 
-  // 2. Swings & Structure
   const swings = detectSwings(candles, { leftBars: 2, rightBars: 2 });
   const breaks = detectStructureBreaks(candles, swings, { symbol, timeframe });
-  const bosOutcomes = breaks.map(b => {
-    const atr = calculateCausalAtr(candles, b.originIndex);
-    return evaluateGenericOutcome(candles, b, { horizonCandles: horizon, atr });
-  });
-  const bosResult = buildStudyResult(symbol, timeframe, 'bos', bosOutcomes, baseline);
+  const bosResult = evaluateStudyComponent(symbol, timeframe, 'bos', breaks, candles, config);
 
-  // 3. Order Blocks
   const obs = detectOrderBlocks(candles, breaks, { symbol, timeframe });
-  const obOutcomes = obs.map(o => {
-    const atr = calculateCausalAtr(candles, o.originIndex);
-    return evaluateGenericOutcome(candles, o, { horizonCandles: horizon, atr });
-  });
-  const obResult = buildStudyResult(symbol, timeframe, 'order_block', obOutcomes, baseline);
+  const obResult = evaluateStudyComponent(symbol, timeframe, 'order_block', obs, candles, config);
 
-  // 4. Sweeps
   const sweeps = detectLiquiditySweeps(candles, swings, { symbol, timeframe });
-  const sweepOutcomes = sweeps.map(s => {
-    const atr = calculateCausalAtr(candles, s.originIndex);
-    return evaluateGenericOutcome(candles, s, { horizonCandles: horizon, atr });
-  });
-  const sweepResult = buildStudyResult(symbol, timeframe, 'liquidity_sweep', sweepOutcomes, baseline);
+  const sweepResult = evaluateStudyComponent(symbol, timeframe, 'liquidity_sweep', sweeps, candles, config);
 
   return [fvgResult, bosResult, obResult, sweepResult];
 }

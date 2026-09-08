@@ -9,7 +9,7 @@ export interface FvgOutcomeOptions {
 
 /**
  * Evaluates forward outcomes for an FVG over a fixed forward window.
- * Calculates real penetration levels, MFE, MAE, and R-multiples.
+ * Calculates real penetration levels, MFE, MAE, R-multiples, and competing-risk first-hit.
  */
 export function evaluateFvgOutcome(
   candles: readonly Candle[],
@@ -26,6 +26,7 @@ export function evaluateFvgOutcome(
   let maxFav = new Decimal(0);
   let maxAdv = new Decimal(0);
   let deepestPenetration = new Decimal(0);
+  let isInvalidated = false;
 
   for (let i = startIndex; i < endIndex; i++) {
     const candle = candles[i]!;
@@ -43,6 +44,9 @@ export function evaluateFvgOutcome(
         const penetration = fvg.top.minus(candle.low);
         if (penetration.gt(deepestPenetration)) deepestPenetration = penetration;
       }
+      if (candle.close.lt(fvg.bottom)) {
+        isInvalidated = true;
+      }
     } else {
       if (candle.high.gte(fvg.bottom) && firstTouchIndex === null) {
         firstTouchIndex = i;
@@ -56,25 +60,41 @@ export function evaluateFvgOutcome(
         const penetration = candle.high.minus(fvg.bottom);
         if (penetration.gt(deepestPenetration)) deepestPenetration = penetration;
       }
+      if (candle.close.gt(fvg.top)) {
+        isInvalidated = true;
+      }
     }
   }
 
   const penRatio = fvg.size.gt(0) ? deepestPenetration.dividedBy(fvg.size) : new Decimal(0);
+  const firstTouchBars = firstTouchIndex !== null ? firstTouchIndex - fvg.originIndex : null;
+  const hit2R = maxFav.gte(risk.times(2));
 
   return {
     eventId: fvg.id,
     horizonCandles: options.horizonCandles,
     firstTouchIndex,
+    firstTouchBars,
     touch25: penRatio.gte(0.25),
     touch50: penRatio.gte(0.50),
     touch75: penRatio.gte(0.75),
     fullFill: penRatio.gte(1.0),
+    fill25: penRatio.gte(0.25),
+    fill50: penRatio.gte(0.50),
+    fill75: penRatio.gte(0.75),
+    fill100: penRatio.gte(1.0),
+    isMitigated: firstTouchIndex !== null,
+    isInvalidated,
     mfe: maxFav,
     mae: maxAdv,
     mfeAtr: options.atr.gt(0) ? maxFav.dividedBy(options.atr) : new Decimal(0),
     maeAtr: options.atr.gt(0) ? maxAdv.dividedBy(options.atr) : new Decimal(0),
+    realizedR: hit2R ? new Decimal(2) : new Decimal(0),
+    firstHit: hit2R ? 'target_first' : 'horizon_expired',
+    timeToFirstHitBars: 0,
+    isAmbiguous: false,
     hit1R: maxFav.gte(risk),
-    hit2R: maxFav.gte(risk.times(2)),
+    hit2R,
     hit3R: maxFav.gte(risk.times(3))
   };
 }

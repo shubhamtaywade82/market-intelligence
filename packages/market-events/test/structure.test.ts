@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { Decimal } from 'decimal.js';
-import { detectSwings } from '../src/swings.js';
+import { detectSwings, detectMultiScaleSwings } from '../src/swings.js';
 import { detectStructureBreaks } from '../src/structure.js';
 import { detectOrderBlocks } from '../src/order-block.js';
-import { detectLiquiditySweeps } from '../src/liquidity.js';
-import type { Candle } from '../src/types.js';
+import { detectLiquiditySweeps, buildLiquidityPools } from '../src/liquidity.js';
+import type { Candle, SwingPoint } from '../src/types.js';
 
 function makeCandle(ts: number, open: number, high: number, low: number, close: number): Candle {
   return {
@@ -18,7 +18,7 @@ function makeCandle(ts: number, open: number, high: number, low: number, close: 
 }
 
 describe('Deterministic Structure Engine', () => {
-  it('detects swing high and swing low with left/right confirmation', () => {
+  it('detects swing high and swing low with multi-strength classification', () => {
     const candles: Candle[] = [
       makeCandle(1000, 100, 102, 98, 101),
       makeCandle(2000, 101, 108, 100, 107), // Swing High at 108
@@ -27,9 +27,33 @@ describe('Deterministic Structure Engine', () => {
       makeCandle(5000, 103, 104, 100, 102)
     ];
 
-    const swings = detectSwings(candles, { leftBars: 1, rightBars: 1 });
-    expect(swings.some(s => s.type === 'high' && s.price.toNumber() === 108)).toBe(true);
-    expect(swings.some(s => s.type === 'low' && s.price.toNumber() === 96)).toBe(true);
+    const swings = detectSwings(candles, { leftBars: 1, rightBars: 1, strength: 'micro' });
+    expect(swings.some(s => s.type === 'high' && s.price.toNumber() === 108 && s.strength === 'micro')).toBe(true);
+    expect(swings.some(s => s.type === 'low' && s.price.toNumber() === 96 && s.strength === 'micro')).toBe(true);
+
+    const multi = detectMultiScaleSwings(candles);
+    expect(multi.micro).toBeDefined();
+    expect(multi.minor).toBeDefined();
+  });
+
+  it('builds liquidity pools identifying equal highs and clusters', () => {
+    const swings: SwingPoint[] = [
+      { id: 's1', type: 'high', index: 5, timestamp: 1000, price: new Decimal(100.05), confirmedAtIndex: 7, strength: 'minor' },
+      { id: 's2', type: 'high', index: 15, timestamp: 2000, price: new Decimal(100.08), confirmedAtIndex: 17, strength: 'minor' }, // EQH (within 0.15%)
+      { id: 's3', type: 'low', index: 10, timestamp: 1500, price: new Decimal(90.0), confirmedAtIndex: 12, strength: 'minor' }
+    ];
+
+    const pools = buildLiquidityPools(swings, 0.002);
+    expect(pools.length).toBe(2);
+
+    const eqhPool = pools.find(p => p.targetType === 'bsl');
+    expect(eqhPool).toBeDefined();
+    expect(eqhPool!.poolType).toBe('equal_highs');
+    expect(eqhPool!.touchCount).toBe(2);
+
+    const singleLowPool = pools.find(p => p.targetType === 'ssl');
+    expect(singleLowPool).toBeDefined();
+    expect(singleLowPool!.poolType).toBe('single_low');
   });
 
   it('detects BOS and Order Block anchored to structural break', () => {
@@ -52,10 +76,10 @@ describe('Deterministic Structure Engine', () => {
     expect(obs.length).toBeGreaterThanOrEqual(1);
     const bullOb = obs.find(o => o.direction === 'bullish');
     expect(bullOb).toBeDefined();
-    expect(bullOb?.originCandleIndex).toBe(2); // down-close candle at index 2
+    expect(bullOb?.originCandleIndex).toBe(2);
   });
 
-  it('detects and deduplicates liquidity sweep when price pierces swing wick and closes inside', () => {
+  it('detects liquidity sweeps and links them to pool IDs with penetration tracking', () => {
     const candles: Candle[] = [
       makeCandle(1000, 100, 105, 98, 102),
       makeCandle(2000, 102, 115, 101, 112), // Swing High 1 at 115
@@ -72,5 +96,7 @@ describe('Deterministic Structure Engine', () => {
     expect(sweep.sweptLevel.toNumber()).toBe(115);
     expect(sweep.sweepExtreme.toNumber()).toBe(117);
     expect(sweep.reclaimed).toBe(true);
+    expect(sweep.poolId).toBeDefined();
+    expect(sweep.penetrationTicks?.toNumber()).toBe(2);
   });
 });
