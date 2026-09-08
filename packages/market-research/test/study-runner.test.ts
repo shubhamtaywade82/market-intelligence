@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { Decimal } from 'decimal.js';
-import { runFvgStudy, runObservationStudy, toResearchResult } from '../src/study-runner.js';
+import { runFvgStudy, runObservationStudy, toResearchResult, createResearchObservations } from '../src/study-runner.js';
 import { extractContextFeatures } from '../src/context-features.js';
+import { DEFAULT_OUTCOME_CONFIG } from '../src/outcome-evaluators.js';
 import { detectSwings, detectStructureBreaks } from '@nemesis-oss/market-events';
-import type { Candle } from '@nemesis-oss/market-events';
+import type { Candle, BaseEvent } from '@nemesis-oss/market-events';
 
 function makeCandle(ts: number, open: number, high: number, low: number, close: number): Candle {
   return {
@@ -107,6 +108,58 @@ describe('Study Runner & Context Features', () => {
     expect(researchResult.sample.eventType).toBe('fvg');
     expect(researchResult.descriptive.hitRates).toBeDefined();
     expect(researchResult.provenance.datasetId).toBe('BTCUSDT-15m');
+    expect(researchResult.dependence.pValueEstimate).toBeDefined();
+  });
+
+  it('integrates multiple-testing correction across component study results', () => {
+    const candles: Candle[] = [
+      makeCandle(1000, 100, 105, 95, 102),
+      makeCandle(2000, 102, 120, 101, 118),
+      makeCandle(3000, 118, 125, 110, 122),
+      makeCandle(4000, 122, 124, 107, 115),
+      makeCandle(5000, 115, 135, 114, 134)
+    ];
+
+    const study = runObservationStudy(candles, { symbol: 'BTCUSDT', timeframe: '15m' });
+    expect(study.multipleTesting).toBeDefined();
+    expect(study.multipleTesting!.procedure).toBe('benjamini_hochberg');
+    expect(study.multipleTesting!.alpha).toBe(0.05);
+    expect(study.multipleTesting!.totalTests).toBeGreaterThanOrEqual(1);
+
+    for (const res of study.results) {
+      if (res.baselineComparisonR2) {
+        expect(res.baselineComparisonR2.adjustedPValue).toBeDefined();
+        expect(typeof res.baselineComparisonR2.isFdrSignificant).toBe('boolean');
+      }
+    }
+  });
+
+  it('respects availableAtIndex for causal isolation in createResearchObservations', () => {
+    const candles: Candle[] = [
+      makeCandle(1000, 100, 102, 98, 100),
+      makeCandle(2000, 100, 104, 99, 103),
+      makeCandle(3000, 103, 105, 101, 104),
+      makeCandle(4000, 104, 106, 102, 105)
+    ];
+
+    // Event formed at index 1, but causally confirmed/available only at index 2
+    const delayedEvent: BaseEvent = {
+      id: 'delayed-1',
+      type: 'control',
+      symbol: 'BTCUSDT',
+      timeframe: '15m',
+      detectedAt: 3000,
+      originIndex: 1,
+      availableAtIndex: 2,
+      availableAtTimestamp: 3000,
+      direction: 'bullish'
+    };
+
+    const observations = createResearchObservations([delayedEvent], candles, DEFAULT_OUTCOME_CONFIG);
+    expect(observations).toHaveLength(1);
+    expect(observations[0]!.event.availableAtIndex).toBe(2);
+    // Context snapshot must reflect bar 2 (the causal available bar), not bar 1
+    expect(observations[0]!.context.atr.gt(0)).toBe(true);
   });
 });
 

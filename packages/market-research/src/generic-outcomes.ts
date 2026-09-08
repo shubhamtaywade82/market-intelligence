@@ -36,6 +36,7 @@ export interface TrajectoryParams {
   readonly atr: Decimal;
   readonly config: OutcomeConfig;
   readonly startOffset?: number | undefined;
+  readonly lowerTfCandles?: readonly Candle[] | undefined;
 }
 
 function checkBarHit(c: Candle, isBull: boolean, target: Decimal, stop: Decimal) {
@@ -43,6 +44,24 @@ function checkBarHit(c: Candle, isBull: boolean, target: Decimal, stop: Decimal)
     hitTarget: isBull ? c.high.gte(target) : c.low.lte(target),
     hitStop: isBull ? c.low.lte(stop) : c.high.gte(stop)
   };
+}
+
+function resolveIntrabarPath(
+  ltfCandles: readonly Candle[],
+  barStart: number,
+  barEnd: number,
+  isBull: boolean,
+  target: Decimal,
+  stop: Decimal
+): { hit: BaseOutcome['firstHit']; resolved: boolean } {
+  const windowCandles = ltfCandles.filter(c => c.timestamp >= barStart && c.timestamp < barEnd);
+  for (const c of windowCandles) {
+    const hitTarget = isBull ? c.high.gte(target) : c.low.lte(target);
+    const hitStop = isBull ? c.low.lte(stop) : c.high.gte(stop);
+    if (hitTarget && !hitStop) return { hit: 'target_first', resolved: true };
+    if (hitStop && !hitTarget) return { hit: 'stop_first', resolved: true };
+  }
+  return { hit: 'simultaneous_collision', resolved: false };
 }
 
 export function evaluateTrajectory(
@@ -57,7 +76,7 @@ export function evaluateTrajectory(
   let mfe = new Decimal(0), mae = new Decimal(0), timeToHit = 0;
   let firstHit: BaseOutcome['firstHit'] = 'horizon_expired';
   let isAmbiguous = false, collision = false, stopHit = false;
-  let pathResolution: PathResolution = 'exact';
+  let pathResolution: PathResolution = 'ohlc_resolved';
   let timeToTarget: number | null = null, timeToStop: number | null = null;
 
   const horizon = Math.min(candles.length, startOffset + config.horizonCandles);
@@ -74,16 +93,28 @@ export function evaluateTrajectory(
     if (hitTarget && timeToTarget === null) timeToTarget = offset;
 
     if (hitTarget && hitStop) {
-      collision = true;
-      isAmbiguous = true;
+      const barEnd = candles[i + 1]?.timestamp ?? (c.timestamp + 3600000);
+      let resolved = false;
+      if (params.lowerTfCandles && params.lowerTfCandles.length > 0) {
+        const ltf = resolveIntrabarPath(params.lowerTfCandles, c.timestamp, barEnd, isBull, target, stop);
+        if (ltf.resolved) {
+          firstHit = ltf.hit;
+          pathResolution = 'lower_tf_resolved';
+          resolved = true;
+        }
+      }
+      if (!resolved) {
+        collision = true;
+        isAmbiguous = true;
+        firstHit = resolveCollision(config.ambiguityPolicy);
+        pathResolution = config.ambiguityPolicy === 'optimistic' ? 'ohlc_optimistic'
+          : config.ambiguityPolicy === 'pessimistic' ? 'ohlc_pessimistic' : 'ambiguous';
+      }
       timeToHit = offset;
-      firstHit = resolveCollision(config.ambiguityPolicy);
-      pathResolution = config.ambiguityPolicy === 'optimistic' ? 'ohlc_optimistic'
-        : config.ambiguityPolicy === 'pessimistic' ? 'ohlc_pessimistic' : 'ambiguous';
       break;
     }
-    if (hitTarget) { firstHit = 'target_first'; timeToHit = offset; pathResolution = 'exact'; break; }
-    if (hitStop) { firstHit = 'stop_first'; timeToHit = offset; pathResolution = 'exact'; break; }
+    if (hitTarget) { firstHit = 'target_first'; timeToHit = offset; pathResolution = 'ohlc_resolved'; break; }
+    if (hitStop) { firstHit = 'stop_first'; timeToHit = offset; pathResolution = 'ohlc_resolved'; break; }
   }
 
   return {
@@ -98,14 +129,15 @@ export function evaluateGenericOutcome(
   causalAtr: Decimal,
   config: OutcomeConfig = DEFAULT_OUTCOME_CONFIG
 ): DirectionalOutcome {
-  const c = candles[event.originIndex];
+  const evalIndex = event.availableAtIndex ?? event.originIndex;
+  const c = candles[evalIndex];
   const entry = c ? c.close : new Decimal(0);
   const traj = evaluateTrajectory(candles, {
     entry,
     direction: event.direction,
     atr: causalAtr,
     config,
-    startOffset: event.originIndex + 1
+    startOffset: evalIndex + 1
   });
 
   const mfeAtr = causalAtr.isZero() ? new Decimal(0) : traj.mfe.dividedBy(causalAtr);
@@ -140,8 +172,42 @@ export function evaluateGenericOutcome(
     targetHit1R: mfeAtr.gte(1),
     targetHit2R: mfeAtr.gte(2),
     targetHit3R: mfeAtr.gte(3),
+    reached1R: mfeAtr.gte(1),
+    reached2R: mfeAtr.gte(2),
+    reached3R: mfeAtr.gte(3),
     hit1R: traj.firstHit === 'target_first' || mfeAtr.gte(1),
     hit2R: traj.firstHit === 'target_first' || (traj.firstHit !== 'stop_first' && mfeAtr.gte(2)),
     hit3R: traj.firstHit !== 'stop_first' && mfeAtr.gte(3)
+  };
+}
+
+export interface TradeSimulationConfig {
+  readonly feeBps?: number | undefined;
+}
+
+/**
+ * Pure execution simulator that computes realized P&L, fees, and execution metrics from an outcome.
+ */
+export function simulateTradeExecution(
+  outcome: BaseOutcome,
+  entryPrice: Decimal,
+  riskAmount: Decimal,
+  config: TradeSimulationConfig = {}
+): TradeExecutionOutcome {
+  const wonTrade = outcome.targetFirst && !outcome.stopFirst;
+  const exitReason = wonTrade ? 'target' : outcome.stopFirst ? 'stop' : 'horizon_expired';
+  const feeRate = new Decimal(config.feeBps ?? 0).dividedBy(10000);
+  const costDrag = entryPrice.times(feeRate).times(2);
+  const grossR = outcome.targetHitR;
+  const costR = riskAmount.gt(0) ? costDrag.dividedBy(riskAmount) : new Decimal(0);
+  const realizedR = grossR.minus(costR);
+
+  return {
+    entryPrice,
+    exitPrice: wonTrade ? entryPrice.plus(riskAmount.times(grossR)) : entryPrice.minus(riskAmount),
+    exitReason,
+    realizedR,
+    wonTrade,
+    barsHeld: outcome.timeToFirstHitBars > 0 ? outcome.timeToFirstHitBars : outcome.horizonCandles
   };
 }

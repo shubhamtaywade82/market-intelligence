@@ -6,8 +6,9 @@ import { generateMatchedControls, type MatchedControlObservation } from './match
 import { calculateWilsonInterval, calculateBootstrapMedianCi, compareAgainstBaseline, type ClusterObservation } from './statistical-significance.js';
 import { clusterEventsIntoEpisodes, type EventEpisode } from './episode-clustering.js';
 import { extractContextSnapshot } from './context-features.js';
-import type { ComponentStudyResult, DirectionalOutcome, EventOutcome, FvgOutcome, OutcomeConfig, Provenance, ResearchObservation, ResearchResult } from './types.js';
+import type { ComponentStudyResult, DirectionalOutcome, EventOutcome, FvgOutcome, OutcomeConfig, Provenance, ResearchObservation, ResearchResult, MultipleTestingSummary } from './types.js';
 import type { HtfCandlesMap } from './multi-timeframe.js';
+import { adjustBenjaminiHochberg } from './multiple-testing.js';
 
 export interface RunStudyOptions {
   readonly symbol: string;
@@ -52,15 +53,12 @@ export function createResearchObservations(
   const configHash = computeDeterministicHash(JSON.stringify(config));
 
   return events.map(ev => {
-    const context = extractContextSnapshot(candles, ev.originIndex, htfCandlesMap);
+    const evalIndex = ev.availableAtIndex ?? ev.originIndex;
+    const context = extractContextSnapshot(candles, evalIndex, htfCandlesMap);
     const outcome = evaluateEventOutcome(ev, candles, context.atr, config);
     const provenance: Provenance = {
-      datasetId,
-      datasetHash,
-      detectorId: ev.type,
-      detectorVersion: '1.0.0',
-      detectorConfigHash: configHash,
-      outcomeVersion: '1.0.0'
+      datasetId, datasetHash, detectorId: ev.type,
+      detectorVersion: '1.0.0', detectorConfigHash: configHash, outcomeVersion: '1.0.0'
     };
 
     return { event: ev, context, outcome, provenance };
@@ -194,6 +192,29 @@ function buildStudyResult(data: StudyResultData): ComponentStudyResult {
 export interface ObservationStudyResult {
   readonly observations: readonly ResearchObservation[];
   readonly results: readonly ComponentStudyResult[];
+  readonly multipleTesting?: MultipleTestingSummary | undefined;
+}
+
+function applyStudyMultipleTesting(results: readonly ComponentStudyResult[], alpha = 0.05) {
+  const tests = results
+    .filter(r => r.baselineComparisonR2 !== undefined)
+    .map(r => ({ id: r.eventType, description: `${r.eventType} R2 uplift`, pValue: r.baselineComparisonR2!.pValueEstimate }));
+  const adjusted = adjustBenjaminiHochberg(tests, alpha);
+  const adjMap = new Map(adjusted.map(a => [a.id, a]));
+  const enriched = results.map(r => {
+    const adj = adjMap.get(r.eventType);
+    if (!r.baselineComparisonR2 || !adj) return r;
+    return { ...r, baselineComparisonR2: { ...r.baselineComparisonR2, adjustedPValue: adj.adjustedPValue, isFdrSignificant: adj.isSignificant } };
+  });
+  return {
+    results: enriched,
+    multipleTesting: {
+      procedure: 'benjamini_hochberg' as const,
+      alpha,
+      totalTests: tests.length,
+      significantCount: adjusted.filter(a => a.isSignificant).length
+    }
+  };
 }
 
 export function runObservationStudy(
@@ -220,22 +241,22 @@ export function runObservationStudy(
   const sweeps = detectLiquiditySweeps(candles, swings, { symbol, timeframe });
   const sweepEval = evaluateStudyComponent({ symbol, timeframe, eventType: 'liquidity_sweep', config, htfCandlesMap }, sweeps, candles);
 
+  const rawResults = [fvgEval.result, bosEval.result, obEval.result, sweepEval.result];
+  const { results, multipleTesting } = applyStudyMultipleTesting(rawResults);
+
   return {
     observations: [...fvgEval.observations, ...bosEval.observations, ...obEval.observations, ...sweepEval.observations],
-    results: [fvgEval.result, bosEval.result, obEval.result, sweepEval.result]
+    results,
+    multipleTesting
   };
 }
 
-export function runUniversalStudy(
-  candles: readonly Candle[],
-  options: RunStudyOptions
-): ComponentStudyResult[] {
+export function runUniversalStudy(candles: readonly Candle[], options: RunStudyOptions): ComponentStudyResult[] {
   return [...runObservationStudy(candles, options).results];
 }
 
 export function runFvgStudy(candles: readonly Candle[], options: RunStudyOptions): ComponentStudyResult {
-  const all = runUniversalStudy(candles, options);
-  return all.find(r => r.eventType === 'fvg')!;
+  return runUniversalStudy(candles, options).find(r => r.eventType === 'fvg')!;
 }
 
 export function toResearchResult(
@@ -264,7 +285,8 @@ export function toResearchResult(
     uncertainty: { confidenceIntervalR2: studyResult.confidenceIntervalR2, medianMfeAtrCi: studyResult.medianMfeAtrCi },
     dependence: {
       clusterCount: sample.clusterCount, effectiveSampleSize: sample.effectiveSampleSize,
-      pValueEstimate: baseComp?.pValueEstimate ?? 1, isStatisticallySignificant: baseComp?.isStatisticallySignificant ?? false
+      pValueEstimate: baseComp?.pValueEstimate ?? 1, isStatisticallySignificant: baseComp?.isStatisticallySignificant ?? false,
+      adjustedPValue: baseComp?.adjustedPValue, isFdrSignificant: baseComp?.isFdrSignificant
     },
     provenance
   };

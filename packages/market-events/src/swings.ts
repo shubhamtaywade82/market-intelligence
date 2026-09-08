@@ -42,12 +42,14 @@ export function detectSwings(
 ): SwingPoint[] {
   const left = options.leftBars ?? 2;
   const right = options.rightBars ?? 2;
-  const strength = options.strength ?? (left >= 10 ? 'major' : left >= 5 ? 'intermediate' : 'minor');
+  const scale = (left >= 10 ? 'major' : left >= 5 ? 'intermediate' : 'minor') as 'major' | 'intermediate' | 'minor';
+  const strength = options.strength ?? scale;
   const swings: SwingPoint[] = [];
 
   for (let i = left; i < candles.length - right; i++) {
     const candidate = candles[i]!;
     const confirmedAtIndex = i + right;
+    const confirmedAtTimestamp = candles[confirmedAtIndex]?.timestamp ?? candidate.timestamp;
 
     if (checkIsSwingHigh(candles, i, left, right)) {
       swings.push({
@@ -57,7 +59,9 @@ export function detectSwings(
         timestamp: candidate.timestamp,
         price: candidate.high,
         confirmedAtIndex,
-        strength
+        confirmedAtTimestamp,
+        strength,
+        scale
       });
     }
 
@@ -69,7 +73,9 @@ export function detectSwings(
         timestamp: candidate.timestamp,
         price: candidate.low,
         confirmedAtIndex,
-        strength
+        confirmedAtTimestamp,
+        strength,
+        scale
       });
     }
   }

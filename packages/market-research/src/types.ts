@@ -26,11 +26,22 @@ export interface OutcomeConfig {
 }
 
 export type PathResolution =
-  | 'exact'
-  | 'lower_tf'
+  | 'ohlc_resolved'
+  | 'lower_tf_resolved'
+  | 'tick_resolved'
   | 'ohlc_pessimistic'
   | 'ohlc_optimistic'
-  | 'ambiguous';
+  | 'ambiguous'
+  | 'exact';
+
+export interface TradeExecutionOutcome {
+  readonly entryPrice: Decimal;
+  readonly exitPrice: Decimal;
+  readonly exitReason: 'target' | 'stop' | 'horizon_expired' | 'invalidation';
+  readonly realizedR: Decimal;
+  readonly wonTrade: boolean;
+  readonly barsHeld: number;
+}
 
 export interface BaseOutcome {
   readonly eventId: string;
@@ -57,8 +68,14 @@ export interface BaseOutcome {
   readonly targetHit1R: boolean;
   readonly targetHit2R: boolean;
   readonly targetHit3R: boolean;
+  readonly reached1R: boolean;
+  readonly reached2R: boolean;
+  readonly reached3R: boolean;
+  /** @deprecated Alias for reached1R */
   readonly hit1R: boolean;
+  /** @deprecated Alias for reached2R */
   readonly hit2R: boolean;
+  /** @deprecated Alias for reached3R */
   readonly hit3R: boolean;
 }
 
@@ -148,9 +165,18 @@ export interface ComponentStudyResult {
     readonly uplift: number;
     readonly isStatisticallySignificant: boolean;
     readonly pValueEstimate: number;
+    readonly adjustedPValue?: number | undefined;
+    readonly isFdrSignificant?: boolean | undefined;
     readonly oddsRatio?: number | undefined;
     readonly relativeUplift?: number | undefined;
   } | undefined;
+}
+
+export interface MultipleTestingSummary {
+  readonly procedure: 'benjamini_hochberg' | 'holm_bonferroni';
+  readonly alpha: number;
+  readonly totalTests: number;
+  readonly significantCount: number;
 }
 
 export interface ResearchPopulationInfo {
@@ -198,6 +224,8 @@ export interface ResearchDependenceStats {
   readonly effectiveSampleSize: number;
   readonly pValueEstimate: number;
   readonly isStatisticallySignificant: boolean;
+  readonly adjustedPValue?: number | undefined;
+  readonly isFdrSignificant?: boolean | undefined;
 }
 
 export interface ResearchResult {

@@ -81,6 +81,8 @@ export function detectHarmonicPatterns(
           timeframe: options.timeframe,
           detectedAt: d.timestamp,
           originIndex: d.index,
+          availableAtIndex: d.confirmedAtIndex,
+          availableAtTimestamp: d.confirmedAtTimestamp ?? d.timestamp,
           direction,
           harmonicType: config.name,
           xPrice: x.price,

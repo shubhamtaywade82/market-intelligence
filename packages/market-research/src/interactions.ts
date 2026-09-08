@@ -21,6 +21,30 @@ export interface InteractionPairAnalysis {
   readonly redundancyScore: number;
 }
 
+export interface AnchorInteractionOptions {
+  readonly maxBarGap?: number | undefined;
+  readonly targetMetric?: 'hit1R' | 'hit2R' | 'hit3R' | undefined;
+  readonly requireDirectionMatch?: boolean | undefined;
+  readonly requirePriorOrCoincident?: boolean | undefined;
+}
+
+export interface ConditionalInteractionResult {
+  readonly anchorType: string;
+  readonly secondaryType: string;
+  readonly sampleSizeAnchor: number;
+  readonly sampleSizeWithSecondary: number;
+  readonly sampleSizeWithoutSecondary: number;
+  readonly probAnchor: number;
+  readonly probWithSecondary: number;
+  readonly probWithoutSecondary: number;
+  readonly conditionalUplift: number;
+  readonly relativeConditionalUplift: number;
+  readonly conditionalOddsRatio: number;
+  readonly informationGain: number;
+  readonly redundancyScore: number;
+  readonly coOccurrenceRate: number;
+}
+
 /**
  * Checks if two events occurred within temporal and structural proximity (same episode / window).
  */
@@ -30,7 +54,103 @@ export function areEventsCoOccurring(
   maxBarGap: number = 3
 ): boolean {
   if (eventA.symbol !== eventB.symbol || eventA.timeframe !== eventB.timeframe) return false;
-  return Math.abs(eventA.originIndex - eventB.originIndex) <= maxBarGap;
+  const idxA = eventA.availableAtIndex ?? eventA.originIndex;
+  const idxB = eventB.availableAtIndex ?? eventB.originIndex;
+  return Math.abs(idxA - idxB) <= maxBarGap;
+}
+
+export function calculateBinaryEntropy(p: number): number {
+  if (p <= 0 || p >= 1) return 0;
+  return -(p * Math.log2(p) + (1 - p) * Math.log2(1 - p));
+}
+
+export function calculateConditionalOddsRatio(
+  hitsWith: number,
+  totalWith: number,
+  hitsWithout: number,
+  totalWithout: number
+): number {
+  const missesWith = totalWith - hitsWith;
+  const missesWithout = totalWithout - hitsWithout;
+  const num = (hitsWith + 0.5) * (missesWithout + 0.5);
+  const den = (missesWith + 0.5) * (hitsWithout + 0.5);
+  return den === 0 ? 1.0 : num / den;
+}
+
+export function calculateInformationGain(
+  probTotal: number,
+  probWith: number,
+  probWithout: number,
+  weightWith: number
+): number {
+  const hTotal = calculateBinaryEntropy(probTotal);
+  const hCond = weightWith * calculateBinaryEntropy(probWith) + (1 - weightWith) * calculateBinaryEntropy(probWithout);
+  return Math.max(0, hTotal - hCond);
+}
+
+function matchesSecondaryCondition(
+  anchor: BaseEvent,
+  sec: BaseEvent,
+  opts: AnchorInteractionOptions
+): boolean {
+  if (anchor.symbol !== sec.symbol || anchor.timeframe !== sec.timeframe) return false;
+  if ((opts.requireDirectionMatch ?? true) && anchor.direction !== sec.direction) return false;
+  const anchorIdx = anchor.availableAtIndex ?? anchor.originIndex;
+  const secIdx = sec.availableAtIndex ?? sec.originIndex;
+  if (opts.requirePriorOrCoincident && secIdx > anchorIdx) return false;
+  return Math.abs(secIdx - anchorIdx) <= (opts.maxBarGap ?? 3);
+}
+
+/**
+ * Evaluates anchor-based opportunity matching and conditional interaction statistics:
+ * P(Y | A, B), P(Y | A, !B), conditional uplift, conditional odds ratio, and information gain.
+ */
+export function analyzeAnchorInteraction(
+  anchorObservations: readonly EventObservation[],
+  secondaryEvents: readonly BaseEvent[],
+  options: AnchorInteractionOptions = {}
+): ConditionalInteractionResult {
+  const anchorType = anchorObservations[0]?.event.type ?? 'anchor';
+  const secondaryType = secondaryEvents[0]?.type ?? 'secondary';
+  const targetMetric = options.targetMetric ?? 'hit2R';
+  const total = anchorObservations.length;
+
+  if (total === 0) {
+    return {
+      anchorType, secondaryType, sampleSizeAnchor: 0, sampleSizeWithSecondary: 0, sampleSizeWithoutSecondary: 0,
+      probAnchor: 0, probWithSecondary: 0, probWithoutSecondary: 0, conditionalUplift: 0,
+      relativeConditionalUplift: 0, conditionalOddsRatio: 1.0, informationGain: 0, redundancyScore: 1.0, coOccurrenceRate: 0
+    };
+  }
+
+  const withSecondary = anchorObservations.filter(o =>
+    secondaryEvents.some(s => matchesSecondaryCondition(o.event, s, options))
+  );
+  const withoutSecondary = anchorObservations.filter(o =>
+    !secondaryEvents.some(s => matchesSecondaryCondition(o.event, s, options))
+  );
+
+  const nWith = withSecondary.length;
+  const nWithout = withoutSecondary.length;
+  const hitsTotal = anchorObservations.filter(o => o.outcome[targetMetric]).length;
+  const hitsWith = withSecondary.filter(o => o.outcome[targetMetric]).length;
+  const hitsWithout = withoutSecondary.filter(o => o.outcome[targetMetric]).length;
+
+  const probAnchor = hitsTotal / total;
+  const probWith = nWith > 0 ? hitsWith / nWith : 0;
+  const probWithout = nWithout > 0 ? hitsWithout / nWithout : 0;
+  const conditionalUplift = probWith - probWithout;
+  const relativeUplift = probWithout > 0 ? conditionalUplift / probWithout : 0;
+  const oddsRatio = calculateConditionalOddsRatio(hitsWith, nWith, hitsWithout, nWithout);
+  const infoGain = calculateInformationGain(probAnchor, probWith, probWithout, nWith / total);
+  const redundancy = Math.max(0, Math.min(1, 1 - Math.abs(conditionalUplift) / Math.max(0.001, Math.abs(probAnchor - 0.5))));
+
+  return {
+    anchorType, secondaryType, sampleSizeAnchor: total, sampleSizeWithSecondary: nWith, sampleSizeWithoutSecondary: nWithout,
+    probAnchor, probWithSecondary: probWith, probWithoutSecondary: probWithout, conditionalUplift,
+    relativeConditionalUplift: relativeUplift, conditionalOddsRatio: oddsRatio, informationGain: infoGain,
+    redundancyScore: redundancy, coOccurrenceRate: nWith / total
+  };
 }
 
 /**

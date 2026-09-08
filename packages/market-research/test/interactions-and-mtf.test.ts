@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { Decimal } from 'decimal.js';
 import type { Candle, BaseEvent } from '@nemesis-oss/market-events';
 import { getCausalHtfCandles, extractCausalHtfContext, extractMultiTimeframeSnapshot } from '../src/multi-timeframe.js';
-import { analyzeEventPairInteraction } from '../src/interactions.js';
+import {
+  analyzeEventPairInteraction,
+  analyzeAnchorInteraction,
+  calculateBinaryEntropy,
+  calculateConditionalOddsRatio,
+  calculateInformationGain
+} from '../src/interactions.js';
 import { computeTimeToEventProfile, computeOutcomeDistribution } from '../src/time-to-event.js';
 import type { BaseOutcome, FvgOutcome } from '../src/types.js';
 
@@ -82,6 +88,60 @@ describe('Event Interaction & Incremental Information', () => {
     expect(interaction.probPrimary).toBe(0.5);  // 50% when solo FVG
     expect(interaction.interactionUplift).toBe(0.0); // 1.0 - max(0.5, 1.0) = 0.0
     expect(interaction.incrementalContributionPrimary).toBe(0.0);
+  });
+
+  it('performs anchor-based conditional opportunity matching with P(Y|A,B) and P(Y|A,!B)', () => {
+    const success: BaseOutcome = {
+      eventId: '1', horizonCandles: 10, mfe: new Decimal(20), mae: new Decimal(2),
+      mfeAtr: new Decimal(2), maeAtr: new Decimal(0.2), realizedR: new Decimal(2),
+      firstHit: 'target_first', timeToFirstHitBars: 2, isAmbiguous: false,
+      hit1R: true, hit2R: true, hit3R: false
+    };
+    const fail: BaseOutcome = {
+      ...success,
+      mfe: new Decimal(2), mfeAtr: new Decimal(0.2), realizedR: new Decimal(-1),
+      firstHit: 'stop_first', hit1R: false, hit2R: false
+    };
+
+    // 4 anchor opportunities: 2 with secondary condition (both win), 2 without secondary condition (1 win, 1 loss)
+    const anchorObs = [
+      { event: { id: 'a1', type: 'fvg', symbol: 'BTC', timeframe: '15m' as const, detectedAt: 1000, originIndex: 10, availableAtIndex: 10, direction: 'bullish' as const }, outcome: success },
+      { event: { id: 'a2', type: 'fvg', symbol: 'BTC', timeframe: '15m' as const, detectedAt: 2000, originIndex: 20, availableAtIndex: 20, direction: 'bullish' as const }, outcome: success },
+      { event: { id: 'a3', type: 'fvg', symbol: 'BTC', timeframe: '15m' as const, detectedAt: 3000, originIndex: 30, availableAtIndex: 30, direction: 'bullish' as const }, outcome: success },
+      { event: { id: 'a4', type: 'fvg', symbol: 'BTC', timeframe: '15m' as const, detectedAt: 4000, originIndex: 40, availableAtIndex: 40, direction: 'bullish' as const }, outcome: fail }
+    ];
+
+    // Secondary events co-occur with a1 and a2
+    const secondaryEvents: BaseEvent[] = [
+      { id: 's1', type: 'bos', symbol: 'BTC', timeframe: '15m' as const, detectedAt: 950, originIndex: 9, availableAtIndex: 9, direction: 'bullish' as const },
+      { id: 's2', type: 'bos', symbol: 'BTC', timeframe: '15m' as const, detectedAt: 1950, originIndex: 19, availableAtIndex: 19, direction: 'bullish' as const }
+    ];
+
+    const result = analyzeAnchorInteraction(anchorObs, secondaryEvents, { maxBarGap: 2, targetMetric: 'hit2R' });
+    expect(result.sampleSizeAnchor).toBe(4);
+    expect(result.sampleSizeWithSecondary).toBe(2);
+    expect(result.sampleSizeWithoutSecondary).toBe(2);
+    expect(result.probAnchor).toBe(0.75); // 3 of 4
+    expect(result.probWithSecondary).toBe(1.0); // 2 of 2
+    expect(result.probWithoutSecondary).toBe(0.5); // 1 of 2
+    expect(result.conditionalUplift).toBe(0.5); // 1.0 - 0.5 = +0.5
+    expect(result.relativeConditionalUplift).toBe(1.0); // (1.0 - 0.5) / 0.5 = 100%
+    expect(result.conditionalOddsRatio).toBeGreaterThan(1.0);
+    expect(result.informationGain).toBeGreaterThan(0);
+    expect(result.coOccurrenceRate).toBe(0.5);
+  });
+
+  it('calculates information theoretic binary entropy and conditional odds ratio accurately', () => {
+    expect(calculateBinaryEntropy(0)).toBe(0);
+    expect(calculateBinaryEntropy(1)).toBe(0);
+    expect(calculateBinaryEntropy(0.5)).toBe(1.0);
+
+    // Odds ratio with Haldane-Anscombe correction
+    const odds = calculateConditionalOddsRatio(10, 10, 5, 10);
+    expect(odds).toBeGreaterThan(1.0);
+
+    const ig = calculateInformationGain(0.5, 0.9, 0.1, 0.5);
+    expect(ig).toBeGreaterThan(0.4);
   });
 });
 

@@ -39,6 +39,8 @@ export interface BaseEvent {
   readonly timeframe: Timeframe;
   readonly detectedAt: number;
   readonly originIndex: number;
+  readonly availableAtIndex?: number | undefined;
+  readonly availableAtTimestamp?: number | undefined;
   readonly direction: EventDirection;
 }
 
@@ -50,8 +52,9 @@ export interface FvgEvent extends BaseEvent {
   readonly size: Decimal;
 }
 
-export type SwingType = 'high' | 'low';
-export type SwingStrength = 'micro' | 'minor' | 'intermediate' | 'major' | 'external' | 'internal';
+export type SwingScale = 'micro' | 'minor' | 'intermediate' | 'major';
+export type StructureScope = 'internal' | 'external';
+export type SwingStrength = SwingScale | StructureScope;
 
 export interface SwingPoint {
   readonly id: string;
@@ -60,7 +63,10 @@ export interface SwingPoint {
   readonly timestamp: number;
   readonly price: Decimal;
   readonly confirmedAtIndex: number;
+  readonly confirmedAtTimestamp?: number | undefined;
   readonly strength?: SwingStrength | undefined;
+  readonly scale?: SwingScale | undefined;
+  readonly scope?: StructureScope | undefined;
 }
 
 export type TrendState = 'bullish' | 'bearish' | 'sideways';

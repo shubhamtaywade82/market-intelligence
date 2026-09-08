@@ -41,17 +41,18 @@ export function findMatchedControlIndex(
 ): number | null {
   const radius = options.searchRadiusBars ?? 50;
   const maxDev = options.maxAtrDeviationRatio ?? 0.30;
-  const eventAtr = calculateCausalAtr(candles, event.originIndex);
-  const evTrend = options.matchTrendRegime ? estimateIndependentTrendRegime(candles, event.originIndex) : null;
-  const evSess = options.matchSession ? getActiveSessions(candles[event.originIndex]!.timestamp)[0] : null;
+  const evalIndex = event.availableAtIndex ?? event.originIndex;
+  const eventAtr = calculateCausalAtr(candles, evalIndex);
+  const evTrend = options.matchTrendRegime ? estimateIndependentTrendRegime(candles, evalIndex) : null;
+  const evSess = options.matchSession ? getActiveSessions(candles[evalIndex]!.timestamp)[0] : null;
 
-  const start = Math.max(0, event.originIndex - radius);
-  const end = Math.min(candles.length - 1, event.originIndex + radius);
+  const start = Math.max(0, evalIndex - radius);
+  const end = Math.min(candles.length - 1, evalIndex + radius);
   let bestIdx: number | null = null;
   let smallestDiff = new Decimal(Infinity);
 
   for (let i = start; i <= end; i++) {
-    if (unavailableIndices.has(i) || Math.abs(i - event.originIndex) < 2) continue;
+    if (unavailableIndices.has(i) || Math.abs(i - evalIndex) < 2) continue;
     if (evTrend !== null && estimateIndependentTrendRegime(candles, i) !== evTrend) continue;
     if (evSess !== null && getActiveSessions(candles[i]!.timestamp)[0] !== evSess) continue;
 
@@ -77,7 +78,7 @@ export function generateMatchedControls(
   config: OutcomeConfig = DEFAULT_OUTCOME_CONFIG,
   options: MatchOptions = {}
 ): MatchedControlResultSet {
-  const unavailableIndices = new Set(events.map(e => e.originIndex));
+  const unavailableIndices = new Set(events.flatMap(e => [e.originIndex, e.availableAtIndex ?? e.originIndex]));
   const controls: MatchedControlObservation[] = [];
 
   for (const ev of events) {
@@ -96,6 +97,8 @@ export function generateMatchedControls(
       timeframe: ev.timeframe,
       detectedAt: candles[matchedIdx]?.timestamp ?? 0,
       originIndex: matchedIdx,
+      availableAtIndex: matchedIdx,
+      availableAtTimestamp: candles[matchedIdx]?.timestamp ?? 0,
       direction: ev.direction // Exact direction symmetry!
     };
 

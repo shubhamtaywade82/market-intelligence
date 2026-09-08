@@ -61,10 +61,11 @@ function evaluateZoneTrajectory(
   let pathResolution: PathResolution = 'exact';
   let timeToTarget: number | null = null, timeToStop: number | null = null;
 
-  const horizon = Math.min(candles.length, event.originIndex + 1 + config.horizonCandles);
-  for (let i = event.originIndex + 1; i < horizon; i++) {
+  const evalIndex = event.availableAtIndex ?? event.originIndex;
+  const horizon = Math.min(candles.length, evalIndex + 1 + config.horizonCandles);
+  for (let i = evalIndex + 1; i < horizon; i++) {
     const c = candles[i]!;
-    const offset = i - event.originIndex;
+    const offset = i - evalIndex;
     checkZoneTouch(c, event, state, offset);
     const fav = isBull ? c.high.minus(entry) : entry.minus(c.low);
     if (fav.gt(mfe)) mfe = fav;
@@ -157,7 +158,7 @@ export function evaluateFvgOutcome(
     mae: traj.mae,
     ...stats,
     firstTouchBars: traj.firstTouchBars,
-    firstTouchIndex: traj.firstTouchBars !== null ? event.originIndex + traj.firstTouchBars : null,
+    firstTouchIndex: traj.firstTouchBars !== null ? (event.availableAtIndex ?? event.originIndex) + traj.firstTouchBars : null,
     fill25: penRatio.gte(0.25),
     fill50: penRatio.gte(0.50),
     fill75: penRatio.gte(0.75),
@@ -208,8 +209,9 @@ export function evaluateStructureOutcome(
   let hasRetested = false;
   let retestBars: number | null = null;
 
-  const horizon = Math.min(candles.length, event.originIndex + 1 + config.horizonCandles);
-  for (let i = event.originIndex + 1; i < horizon; i++) {
+  const evalIndex = event.availableAtIndex ?? event.originIndex;
+  const horizon = Math.min(candles.length, evalIndex + 1 + config.horizonCandles);
+  for (let i = evalIndex + 1; i < horizon; i++) {
     const c = candles[i]!;
     const retested = isBull
       ? c.low.lte(event.breakPrice.plus(tol)) && c.low.gte(event.breakPrice.minus(tol))
@@ -217,7 +219,7 @@ export function evaluateStructureOutcome(
 
     if (retested && !hasRetested) {
       hasRetested = true;
-      retestBars = i - event.originIndex;
+      retestBars = i - evalIndex;
       break;
     }
   }
@@ -243,13 +245,14 @@ export function evaluateLiquiditySweepOutcome(
   let isReclaimed = false;
   let reclaimBars: number | null = null;
 
-  const horizon = Math.min(candles.length, event.originIndex + 1 + config.horizonCandles);
-  for (let i = event.originIndex + 1; i < horizon; i++) {
+  const evalIndex = event.availableAtIndex ?? event.originIndex;
+  const horizon = Math.min(candles.length, evalIndex + 1 + config.horizonCandles);
+  for (let i = evalIndex + 1; i < horizon; i++) {
     const c = candles[i]!;
     const reclaimed = isBull ? c.close.gt(event.sweptLevel) : c.close.lt(event.sweptLevel);
     if (reclaimed && !isReclaimed) {
       isReclaimed = true;
-      reclaimBars = i - event.originIndex;
+      reclaimBars = i - evalIndex;
       break;
     }
   }
