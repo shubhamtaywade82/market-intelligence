@@ -59,6 +59,8 @@ export function mapToCanonicalEquivalence(events: readonly (BaseEvent | MarketEv
   return mappings;
 }
 
+export type EquivalenceConclusion = 'equivalent' | 'non-equivalent' | 'inconclusive';
+
 export interface BehavioralEquivalenceResult {
   readonly sampleSizeA: number;
   readonly sampleSizeB: number;
@@ -73,6 +75,7 @@ export interface BehavioralEquivalenceResult {
   readonly confidenceInterval90: { readonly lower: number; readonly upper: number };
   readonly isBehaviorallyEquivalent: boolean;
   readonly equivalenceMargin: number;
+  readonly conclusion: EquivalenceConclusion;
 }
 
 export function calculateTost(
@@ -103,14 +106,33 @@ export function calculateTost(
   return { z1, z2, tostPValue: Math.max(p1, p2), se };
 }
 
+function computeTostStats(pA: number, nA: number, pB: number, nB: number, delta: number, alpha: number) {
+  const diff = Math.abs(pA - pB);
+  const pooledP = (pA * nA + pB * nB) / (nA + nB);
+  const pooledSe = Math.sqrt(pooledP * (1 - pooledP) * (1 / nA + 1 / nB));
+  const zScore = pooledSe > 0 ? (pA - pB) / pooledSe : 0;
+  const pValue = 2 * (1 - normalCdf(Math.abs(zScore)));
+  const tost = calculateTost(pA, nA, pB, nB, delta);
+  const z90 = 1.64485;
+  const ci90 = { lower: (pA - pB) - z90 * tost.se, upper: (pA - pB) + z90 * tost.se };
+  const isBehaviorallyEquivalent = tost.tostPValue <= alpha;
+  const conclusion: EquivalenceConclusion = isBehaviorallyEquivalent
+    ? 'equivalent'
+    : pValue <= alpha ? 'non-equivalent' : 'inconclusive';
+
+  return { diff, zScore, pValue, tost, ci90, isBehaviorallyEquivalent, conclusion };
+}
+
+export type EquivalenceMetric = 'reached1R' | 'reached2R' | 'reached3R' | 'hit1R' | 'hit2R' | 'hit3R';
+
 /**
  * Formal Two One-Sided Tests (TOST) for behavioral equivalence between event families.
- * Rejects H0: |pA - pB| >= delta when tostPValue <= alpha (both one-sided tests reject).
+ * Categorizes findings into: equivalent, non-equivalent, or inconclusive.
  */
 export function testOutcomeEquivalence(
   observationsA: readonly ResearchObservation[],
   observationsB: readonly ResearchObservation[],
-  targetMetric: 'hit1R' | 'hit2R' | 'hit3R' = 'hit2R',
+  targetMetric: EquivalenceMetric = 'reached2R',
   equivalenceMargin: number = 0.08,
   alpha: number = 0.05
 ): BehavioralEquivalenceResult {
@@ -121,40 +143,20 @@ export function testOutcomeEquivalence(
       sampleSizeA: nA, sampleSizeB: nB, hitRateA: 0, hitRateB: 0,
       absoluteDifference: 0, zScore: 0, pValue: 1.0, tostPValue: 1.0, tostZ1: 0, tostZ2: 0,
       confidenceInterval90: { lower: 0, upper: 0 },
-      isBehaviorallyEquivalent: false, equivalenceMargin
+      isBehaviorallyEquivalent: false, equivalenceMargin, conclusion: 'inconclusive'
     };
   }
 
-  const countA = observationsA.filter(o => o.outcome[targetMetric]).length;
-  const countB = observationsB.filter(o => o.outcome[targetMetric]).length;
-  const pA = countA / nA;
-  const pB = countB / nB;
-  const diff = Math.abs(pA - pB);
-
-  const pooledP = (countA + countB) / (nA + nB);
-  const pooledSe = Math.sqrt(pooledP * (1 - pooledP) * (1 / nA + 1 / nB));
-  const zScore = pooledSe > 0 ? (pA - pB) / pooledSe : 0;
-  const pValue = 2 * (1 - normalCdf(Math.abs(zScore)));
-
-  const tost = calculateTost(pA, nA, pB, nB, equivalenceMargin);
-  const z90 = 1.64485;
-  const ci90 = { lower: (pA - pB) - z90 * tost.se, upper: (pA - pB) + z90 * tost.se };
-  const isBehaviorallyEquivalent = tost.tostPValue <= alpha;
+  const pA = observationsA.filter(o => o.outcome[targetMetric]).length / nA;
+  const pB = observationsB.filter(o => o.outcome[targetMetric]).length / nB;
+  const s = computeTostStats(pA, nA, pB, nB, equivalenceMargin, alpha);
 
   return {
-    sampleSizeA: nA,
-    sampleSizeB: nB,
-    hitRateA: pA,
-    hitRateB: pB,
-    absoluteDifference: diff,
-    zScore,
-    pValue,
-    tostPValue: tost.tostPValue,
-    tostZ1: tost.z1,
-    tostZ2: tost.z2,
-    confidenceInterval90: ci90,
-    isBehaviorallyEquivalent,
-    equivalenceMargin
+    sampleSizeA: nA, sampleSizeB: nB, hitRateA: pA, hitRateB: pB,
+    absoluteDifference: s.diff, zScore: s.zScore, pValue: s.pValue,
+    tostPValue: s.tost.tostPValue, tostZ1: s.tost.z1, tostZ2: s.tost.z2,
+    confidenceInterval90: s.ci90, isBehaviorallyEquivalent: s.isBehaviorallyEquivalent,
+    equivalenceMargin, conclusion: s.conclusion
   };
 }
 

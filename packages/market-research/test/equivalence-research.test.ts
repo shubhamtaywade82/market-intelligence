@@ -120,12 +120,14 @@ describe('Equivalence Research Engine', () => {
     expect(equivResult.absoluteDifference).toBeCloseTo(0.01, 4);
     expect(equivResult.tostPValue).toBeLessThan(0.05);
     expect(equivResult.isBehaviorallyEquivalent).toBe(true);
+    expect(equivResult.conclusion).toBe('equivalent');
     expect(equivResult.confidenceInterval90.lower).toBeGreaterThan(-0.08);
     expect(equivResult.confidenceInterval90.upper).toBeLessThan(0.08);
 
     const nonEquivResult = testOutcomeEquivalence(groupA, groupC, 'hit2R', 0.08);
     expect(nonEquivResult.absoluteDifference).toBeCloseTo(0.40, 4);
     expect(nonEquivResult.isBehaviorallyEquivalent).toBe(false);
+    expect(nonEquivResult.conclusion).toBe('non-equivalent');
     expect(nonEquivResult.tostPValue).toBeGreaterThan(0.05);
   });
 });

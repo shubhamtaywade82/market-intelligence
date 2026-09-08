@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { Decimal } from 'decimal.js';
 import type { Candle, Timeframe, BaseEvent } from '@nemesis-oss/market-events';
-import { detectFvg, detectSwings, detectStructureBreaks, detectOrderBlocks, detectLiquiditySweeps } from '@nemesis-oss/market-events';
+import { detectFvg, detectSwings, detectStructureBreaks, detectBos, detectChoch, detectMss, detectOrderBlocks, detectLiquiditySweeps, detectDisplacement } from '@nemesis-oss/market-events';
 import { evaluateEventOutcome, DEFAULT_OUTCOME_CONFIG } from './outcome-evaluators.js';
 import { generateMatchedControls, type MatchedControlObservation } from './matched-controls.js';
 import { calculateWilsonInterval, calculateBootstrapMedianCi, compareAgainstBaseline, type ClusterObservation } from './statistical-significance.js';
@@ -31,7 +31,7 @@ export function computeDatasetSha256(candles: readonly Candle[]): string {
   for (const c of candles) {
     hash.update(`${c.timestamp}:${c.open}:${c.high}:${c.low}:${c.close}:${c.volume}|`);
   }
-  return hash.digest('hex').slice(0, 16);
+  return hash.digest('hex');
 }
 
 function calculateMedian(values: number[]): number {
@@ -86,12 +86,12 @@ function buildClusterObservations(
 
   for (const ep of episodes) {
     const epObs = ep.allEvents.map(e => obsMap.get(e.id)).filter((o): o is ResearchObservation => o !== undefined);
-    eventClusters.push({ hits: epObs.filter(o => o.outcome.hit2R).length, trials: epObs.length, clusterId: ep.episodeId });
+    eventClusters.push({ hits: epObs.filter(o => o.outcome.reached2R).length, trials: epObs.length, clusterId: ep.episodeId });
 
     const epEventIds = new Set(ep.allEvents.map(e => e.id));
     const epControls = controls.filter(c => epEventIds.has(c.matchedEventId));
     if (epControls.length > 0) {
-      baselineClusters.push({ hits: epControls.filter(c => c.outcome.hit2R).length, trials: epControls.length, clusterId: `ctrl-${ep.episodeId}` });
+      baselineClusters.push({ hits: epControls.filter(c => c.outcome.reached2R).length, trials: epControls.length, clusterId: `ctrl-${ep.episodeId}` });
     }
   }
 
@@ -102,7 +102,7 @@ function evaluateStudyComponent(
   opts: ComponentEvalOptions,
   events: readonly BaseEvent[],
   candles: readonly Candle[]
-): { readonly result: ComponentStudyResult; readonly observations: readonly ResearchObservation[] } {
+): { readonly result: ComponentStudyResult; readonly observations: readonly ResearchObservation[]; readonly matchRatio: number } {
   const observations = createResearchObservations(events, candles, opts.config, opts.htfCandlesMap);
   const outcomes = observations.map(o => o.outcome);
 
@@ -119,7 +119,7 @@ function evaluateStudyComponent(
     eventClusters,
     baselineClusters
   });
-  return { result, observations };
+  return { result, observations, matchRatio: controls.matchRatio };
 }
 
 interface StudyResultData {
@@ -135,16 +135,16 @@ function computeStudyStats(data: StudyResultData, sampleSize: number) {
   const { outcomes, controlOutcomes, clusterSizes } = data;
   const fvg = outcomes.filter((o): o is FvgOutcome => 'fill25' in o);
   const isFvg = fvg.length === sampleSize;
-  const hit2 = outcomes.filter(o => o.hit2R).length;
+  const hit2 = outcomes.filter(o => o.reached2R).length;
   const mfe = outcomes.map(o => o.mfeAtr.toNumber());
   const baseline = compareAgainstBaseline({
-    eventHits: hit2, eventTrials: sampleSize, baselineHits: controlOutcomes.filter(o => o.hit2R).length,
+    eventHits: hit2, eventTrials: sampleSize, baselineHits: controlOutcomes.filter(o => o.reached2R).length,
     baselineTrials: controlOutcomes.length, clusterSizes, eventClusters: data.eventClusters, baselineClusters: data.baselineClusters
   });
   return {
     fvgRates: isFvg ? { r: fvg.filter(o => o.firstTouchBars !== null).length / sampleSize, f25: fvg.filter(o => o.fill25).length / sampleSize, f50: fvg.filter(o => o.fill50).length / sampleSize, f100: fvg.filter(o => o.fill100).length / sampleSize } : null,
     mfe, medianMfeCi: calculateBootstrapMedianCi(mfe), intervalR2: calculateWilsonInterval(hit2, sampleSize),
-    hitRates: { r1: outcomes.filter(o => o.hit1R).length / sampleSize, r2: hit2 / sampleSize, r3: outcomes.filter(o => o.hit3R).length / sampleSize },
+    hitRates: { r1: outcomes.filter(o => o.reached1R).length / sampleSize, r2: hit2 / sampleSize, r3: outcomes.filter(o => o.reached3R).length / sampleSize },
     baseline
   };
 }
@@ -179,7 +179,40 @@ function buildStudyResult(data: StudyResultData): ComponentStudyResult {
 export interface ObservationStudyResult {
   readonly observations: readonly ResearchObservation[];
   readonly results: readonly ComponentStudyResult[];
+  readonly matchRatios: ReadonlyMap<string, number>;
   readonly multipleTesting?: MultipleTestingSummary | undefined;
+}
+
+export function runObservationStudy(candles: readonly Candle[], options: RunStudyOptions): ObservationStudyResult {
+  const config: OutcomeConfig = {
+    ...DEFAULT_OUTCOME_CONFIG, horizonCandles: options.horizonCandles ?? 24, ambiguityPolicy: options.ambiguityPolicy ?? 'pessimistic'
+  };
+  const { symbol, timeframe, htfCandlesMap } = options;
+  const swings = detectSwings(candles, { leftBars: 2, rightBars: 2 });
+  const allBreaks = detectStructureBreaks(candles, swings, { symbol, timeframe });
+
+  const components: Array<[string, readonly import('@nemesis-oss/market-events').BaseEvent[]]> = [
+    ['fvg', detectFvg(candles, { symbol, timeframe })],
+    ['bos', detectBos(candles, swings, { symbol, timeframe })],
+    ['choch', detectChoch(candles, swings, { symbol, timeframe })],
+    ['mss', detectMss(candles, swings, { symbol, timeframe })],
+    ['order_block', detectOrderBlocks(candles, allBreaks, { symbol, timeframe })],
+    ['liquidity_sweep', detectLiquiditySweeps(candles, swings, { symbol, timeframe })],
+    ['displacement', detectDisplacement(candles, { symbol, timeframe })]
+  ];
+
+  const evals = components.map(([eventType, events]) =>
+    evaluateStudyComponent({ symbol, timeframe, eventType, config, htfCandlesMap }, events, candles)
+  );
+
+  const matchRatios = new Map(evals.map((e, i) => [components[i]![0], e.matchRatio]));
+  const { results, multipleTesting } = applyStudyMultipleTesting(evals.map(e => e.result));
+  return {
+    observations: evals.flatMap(e => e.observations),
+    results,
+    matchRatios,
+    multipleTesting
+  };
 }
 
 function applyStudyMultipleTesting(results: readonly ComponentStudyResult[], alpha = 0.05) {
@@ -199,29 +232,6 @@ function applyStudyMultipleTesting(results: readonly ComponentStudyResult[], alp
       procedure: 'benjamini_hochberg' as const, alpha,
       totalTests: tests.length, significantCount: adjusted.filter(a => a.isSignificant).length
     }
-  };
-}
-
-export function runObservationStudy(candles: readonly Candle[], options: RunStudyOptions): ObservationStudyResult {
-  const config: OutcomeConfig = {
-    ...DEFAULT_OUTCOME_CONFIG, horizonCandles: options.horizonCandles ?? 24, ambiguityPolicy: options.ambiguityPolicy ?? 'pessimistic'
-  };
-  const { symbol, timeframe, htfCandlesMap } = options;
-  const swings = detectSwings(candles, { leftBars: 2, rightBars: 2 });
-  const breaks = detectStructureBreaks(candles, swings, { symbol, timeframe });
-
-  const evals = [
-    evaluateStudyComponent({ symbol, timeframe, eventType: 'fvg', config, htfCandlesMap }, detectFvg(candles, { symbol, timeframe }), candles),
-    evaluateStudyComponent({ symbol, timeframe, eventType: 'bos', config, htfCandlesMap }, breaks, candles),
-    evaluateStudyComponent({ symbol, timeframe, eventType: 'order_block', config, htfCandlesMap }, detectOrderBlocks(candles, breaks, { symbol, timeframe }), candles),
-    evaluateStudyComponent({ symbol, timeframe, eventType: 'liquidity_sweep', config, htfCandlesMap }, detectLiquiditySweeps(candles, swings, { symbol, timeframe }), candles)
-  ];
-
-  const { results, multipleTesting } = applyStudyMultipleTesting(evals.map(e => e.result));
-  return {
-    observations: evals.flatMap(e => e.observations),
-    results,
-    multipleTesting
   };
 }
 
@@ -246,7 +256,8 @@ function determineEvidenceStatus(
 export function toResearchResult(
   studyResult: ComponentStudyResult,
   candleCount: number,
-  provenance: Provenance
+  provenance: Provenance,
+  matchRatio?: number | undefined
 ): ResearchResult {
   const baseComp = studyResult.baselineComparisonR2;
   const sample = {
@@ -259,7 +270,7 @@ export function toResearchResult(
   return {
     population: { symbol: studyResult.symbol, timeframe: studyResult.timeframe, candleCount },
     sample,
-    controls: { sampleSize: studyResult.sampleSize, matchedHitRateR2: baseComp?.baselineProbability ?? 0, matchRatio: 1.0 },
+    controls: { sampleSize: studyResult.sampleSize, matchedHitRateR2: baseComp?.baselineProbability ?? 0, matchRatio: matchRatio ?? 0 },
     descriptive: {
       hitRates: studyResult.hitRates, medianMfeAtr: studyResult.medianMfeAtr, medianMaeAtr: studyResult.medianMaeAtr,
       retestProbability: studyResult.retestProbability, fill25Rate: studyResult.fill25Rate,

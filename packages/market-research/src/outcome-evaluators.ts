@@ -119,7 +119,6 @@ function computeOutcomeStats(
     mfeR,
     maeR,
     targetHitR,
-    realizedR: targetHitR,
     firstHit: traj.firstHit,
     timeToFirstHitBars: traj.timeToFirstHitBars,
     isAmbiguous: traj.isAmbiguous,
@@ -227,12 +226,21 @@ export function evaluateStructureOutcome(
     }
   }
 
+  // nextBreakBars: bars until price creates a new structural extreme beyond the break level
+  let nextBreakBars: number | null = null;
+  const threshold = isBull ? event.breakPrice.plus(causalAtr.times(0.5)) : event.breakPrice.minus(causalAtr.times(0.5));
+  for (let i = evalIndex + 1; i < horizon; i++) {
+    const c = candles[i]!;
+    const extended = isBull ? c.high.gte(threshold) : c.low.lte(threshold);
+    if (extended) { nextBreakBars = i - evalIndex; break; }
+  }
+
   return {
     ...base,
     hasRetested,
     retestBars,
     isContinuation: base.hit2R,
-    nextBreakBars: null
+    nextBreakBars
   };
 }
 
@@ -265,7 +273,7 @@ export function evaluateLiquiditySweepOutcome(
     isReclaimed,
     reclaimBars,
     postSweepDisplacementAtr: base.mfeAtr,
-    oppositeLiquidityTaken: base.hit3R
+    oppositeLiquidityTaken: base.reached2R
   };
 }
 

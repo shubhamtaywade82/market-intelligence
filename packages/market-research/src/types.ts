@@ -11,13 +11,15 @@ export interface Provenance {
   readonly outcomeDefinitionHash?: string | undefined;
 }
 
-export type FirstHitResult =
-  | 'target_first'
-  | 'stop_first'
-  | 'simultaneous_collision'
-  | 'horizon_expired';
-
+export type FirstHitResult = 'target_first' | 'stop_first' | 'simultaneous_collision' | 'horizon_expired';
 export type AmbiguityPolicy = 'pessimistic' | 'optimistic' | 'ambiguous';
+
+export interface OutcomeLabel {
+  readonly startIndex: number;
+  readonly endIndex: number;
+  readonly startTimestamp: number;
+  readonly endTimestamp: number;
+}
 
 export interface OutcomeConfig {
   readonly horizonCandles: number;
@@ -27,15 +29,9 @@ export interface OutcomeConfig {
 }
 
 export type PathResolution =
-  | 'single_bar_unambiguous'
-  | 'ohlc_resolved'
-  | 'ohlc_collision'
-  | 'lower_tf_resolved'
-  | 'tick_resolved'
-  | 'ohlc_pessimistic'
-  | 'ohlc_optimistic'
-  | 'ambiguous'
-  | 'exact';
+  | 'single_bar_unambiguous' | 'ohlc_resolved' | 'ohlc_collision'
+  | 'lower_tf_resolved' | 'tick_resolved' | 'ohlc_pessimistic' | 'ohlc_optimistic'
+  | 'ambiguous' | 'exact';
 
 export interface TradeOutcome {
   readonly entryPrice: Decimal;
@@ -61,6 +57,7 @@ export interface OutcomeDefinition {
 export interface BaseOutcome {
   readonly eventId: string;
   readonly horizonCandles: number;
+  readonly label?: OutcomeLabel | undefined;
   readonly mfe: Decimal;
   readonly mae: Decimal;
   readonly mfeAtr: Decimal;
@@ -68,8 +65,8 @@ export interface BaseOutcome {
   readonly mfeR: Decimal;
   readonly maeR: Decimal;
   readonly targetHitR: Decimal;
-  /** @deprecated Use targetHitR or explicit trade execution simulator instead */
-  readonly realizedR: Decimal;
+  /** @deprecated Realized R belongs strictly to TradeOutcome */
+  readonly realizedR?: Decimal | undefined;
   readonly firstHit: FirstHitResult;
   readonly timeToFirstHitBars: number;
   readonly isAmbiguous: boolean;
@@ -86,6 +83,9 @@ export interface BaseOutcome {
   readonly reached1R: boolean;
   readonly reached2R: boolean;
   readonly reached3R: boolean;
+  readonly timeTo1R?: number | null | undefined;
+  readonly timeTo2R?: number | null | undefined;
+  readonly timeTo3R?: number | null | undefined;
   /** @deprecated Alias for reached1R */
   readonly hit1R: boolean;
   /** @deprecated Alias for reached2R */

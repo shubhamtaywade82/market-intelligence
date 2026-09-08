@@ -106,7 +106,7 @@ describe('Condition Engine & Predicate Expressions', () => {
 
     expect(feature('atr').gte(12).evaluate(obs)).toBe(true);
     expect(feature('atr').lt(10).evaluate(obs)).toBe(false);
-    expect(feature('mfeAtr').gt(3.0).evaluate(obs)).toBe(true);
+    expect(outcomeFeature('mfeAtr').gt(3.0).evaluate(obs)).toBe(true);
   });
 
   it('evaluates combinators (all, any, not)', () => {
@@ -154,5 +154,13 @@ describe('Condition Engine & Predicate Expressions', () => {
     expect(result.unconditionedHitRateR2).toBe(0.5); // 2 of 4 = 50%
     expect(result.conditionedHitRateR2).toBe(1.0);   // 2 of 2 = 100%
     expect(result.upliftR2).toBe(0.5);               // +50% uplift
+  });
+
+  it('enforces predictive condition scope vs outcome condition scope', () => {
+    const predCond = contextFeature('atr').gte(10);
+    expect(predCond.scope).toBe('predictive');
+
+    const outCond = outcomeFeature('mfeAtr').gt(2.0);
+    expect(outCond.scope).toBe('outcome');
   });
 });

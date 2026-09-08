@@ -73,7 +73,7 @@ describe('Study Runner & Context Features', () => {
       horizonCandles: 3
     });
 
-    expect(study.results.length).toBe(4);
+    expect(study.results.length).toBe(7);
     expect(study.observations.length).toBeGreaterThanOrEqual(1);
 
     const firstObs = study.observations[0]!;
@@ -82,7 +82,7 @@ describe('Study Runner & Context Features', () => {
     expect(firstObs.context.trendRegime).toBeDefined();
     expect(firstObs.outcome.targetHitR).toBeDefined();
     expect(firstObs.provenance.datasetId).toBe('BTCUSDT-15m');
-    expect(firstObs.provenance.datasetHash).toHaveLength(16);
+    expect(firstObs.provenance.datasetHash).toHaveLength(64);
     expect(firstObs.provenance.detectorConfigHash).toHaveLength(16);
     expect(firstObs.provenance.detectorVersion).toBe('1.0.0');
     expect(firstObs.provenance.outcomeVersion).toBe('1.0.0');

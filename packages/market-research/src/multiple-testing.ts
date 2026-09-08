@@ -40,13 +40,21 @@ export function adjustBenjaminiHochberg(
     adjustedPValues[i] = runningMin;
   }
 
-  // Restore original order or return ranked
-  return sorted.map((item, idx) => ({
+  // Build result array in sorted order first, then restore original input order
+  const ranked = sorted.map((item, idx) => ({
     ...item.test,
     rank: idx + 1,
     adjustedPValue: adjustedPValues[idx]!,
-    isSignificant: adjustedPValues[idx]! <= alpha
+    isSignificant: adjustedPValues[idx]! <= alpha,
+    originalIndex: item.originalIndex
   }));
+
+  // Restore original input order so positional correspondence is preserved for callers
+  const result = new Array<AdjustedTestResult>(m);
+  for (const r of ranked) {
+    result[r.originalIndex] = { id: r.id, description: r.description, pValue: r.pValue, effectSize: r.effectSize, rank: r.rank, adjustedPValue: r.adjustedPValue, isSignificant: r.isSignificant };
+  }
+  return result;
 }
 
 /**

@@ -158,7 +158,6 @@ export function evaluateGenericOutcome(
     mfeR: mfeAtr,
     maeR: maeAtr,
     targetHitR,
-    realizedR: targetHitR,
     firstHit: traj.firstHit,
     timeToFirstHitBars: traj.timeToFirstHitBars,
     isAmbiguous: traj.isAmbiguous,

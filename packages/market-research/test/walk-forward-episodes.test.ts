@@ -59,4 +59,36 @@ describe('Episode Clustering & Walk-Forward Validation', () => {
     expect(windows[0]!.frozenHypotheses?.some(f => f.component === 'fvg')).toBe(true);
     expect(stability.some(s => s.component === 'fvg')).toBe(true);
   });
+
+  it('preserves warm-up history across boundaries without cold restart', () => {
+    const candles: Candle[] = [];
+    let price = new Decimal(50000);
+    for (let i = 0; i < 200; i++) {
+      const delta = (i % 8 - 4) * 20;
+      const open = price;
+      const close = open.plus(delta);
+      candles.push({
+        timestamp: 1000 + i * 60000,
+        open,
+        high: Decimal.max(open, close).plus(10),
+        low: Decimal.min(open, close).minus(10),
+        close,
+        volume: new Decimal(100)
+      });
+      price = close;
+    }
+
+    const { windows } = runWalkForwardValidation(candles, {
+      symbol: 'BTCUSDT',
+      timeframe: '15m',
+      trainCandlesCount: 80,
+      testCandlesCount: 40,
+      stepCandlesCount: 40,
+      horizonCandles: 10,
+      warmupBars: 30
+    });
+
+    expect(windows[0]!.testStartTime).toBe(candles[90]!.timestamp);
+    expect(windows[0]!.testResults.length).toBeGreaterThan(0);
+  });
 });

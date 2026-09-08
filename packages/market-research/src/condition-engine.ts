@@ -1,48 +1,57 @@
 import type { Timeframe } from '@nemesis-oss/market-events';
 import type { ContextSnapshot, ResearchObservation } from './types.js';
 
-export interface ConditionExpression {
+export type ConditionScope = 'predictive' | 'outcome';
+
+export interface ConditionExpression<Scope extends ConditionScope = ConditionScope> {
   readonly type: 'all' | 'any' | 'not' | 'comparison' | 'custom';
+  readonly scope: Scope;
   readonly description: string;
   readonly evaluate: (obs: ResearchObservation) => boolean;
 }
 
-export function all(...conditions: readonly ConditionExpression[]): ConditionExpression {
+export type PredictiveCondition = ConditionExpression<'predictive'>;
+export type OutcomeCondition = ConditionExpression<'outcome'>;
+
+export function all<S extends ConditionScope = 'predictive'>(...conditions: readonly ConditionExpression<S>[]): ConditionExpression<S> {
   return {
     type: 'all',
+    scope: (conditions[0]?.scope ?? 'predictive') as S,
     description: conditions.map(c => c.description).join(' AND '),
     evaluate: obs => conditions.every(c => c.evaluate(obs))
   };
 }
 
-export function any(...conditions: readonly ConditionExpression[]): ConditionExpression {
+export function any<S extends ConditionScope = 'predictive'>(...conditions: readonly ConditionExpression<S>[]): ConditionExpression<S> {
   return {
     type: 'any',
+    scope: (conditions[0]?.scope ?? 'predictive') as S,
     description: `(${conditions.map(c => c.description).join(' OR ')})`,
     evaluate: obs => conditions.some(c => c.evaluate(obs))
   };
 }
 
-export function not(condition: ConditionExpression): ConditionExpression {
+export function not<S extends ConditionScope = 'predictive'>(condition: ConditionExpression<S>): ConditionExpression<S> {
   return {
     type: 'not',
+    scope: condition.scope,
     description: `NOT(${condition.description})`,
     evaluate: obs => !condition.evaluate(obs)
   };
 }
 
-export interface StringFeatureBuilder {
-  readonly eq: (val: string) => ConditionExpression;
-  readonly neq: (val: string) => ConditionExpression;
-  readonly in: (vals: readonly string[]) => ConditionExpression;
+export interface StringFeatureBuilder<S extends ConditionScope = 'predictive'> {
+  readonly eq: (val: string) => ConditionExpression<S>;
+  readonly neq: (val: string) => ConditionExpression<S>;
+  readonly in: (vals: readonly string[]) => ConditionExpression<S>;
 }
 
-export interface NumberFeatureBuilder {
-  readonly eq: (val: number) => ConditionExpression;
-  readonly gt: (val: number) => ConditionExpression;
-  readonly gte: (val: number) => ConditionExpression;
-  readonly lt: (val: number) => ConditionExpression;
-  readonly lte: (val: number) => ConditionExpression;
+export interface NumberFeatureBuilder<S extends ConditionScope = 'predictive'> {
+  readonly eq: (val: number) => ConditionExpression<S>;
+  readonly gt: (val: number) => ConditionExpression<S>;
+  readonly gte: (val: number) => ConditionExpression<S>;
+  readonly lt: (val: number) => ConditionExpression<S>;
+  readonly lte: (val: number) => ConditionExpression<S>;
 }
 
 function extractFeatureValue(obs: ResearchObservation, name: string): string | number | undefined {
@@ -64,22 +73,23 @@ export type ContextFeatureName = ContextStringFeature | ContextNumericFeature;
 export type OutcomeNumericFeature = 'mfeAtr' | 'maeAtr';
 export type OutcomeFeatureName = OutcomeNumericFeature;
 
-function createNumericFeatureBuilder(name: string): NumberFeatureBuilder {
+function createNumericFeatureBuilder<S extends ConditionScope>(name: string, scope: S): NumberFeatureBuilder<S> {
   return {
-    eq: (val: number): ConditionExpression => ({ type: 'comparison', description: `${name} == ${val}`, evaluate: (o: ResearchObservation) => Number(extractFeatureValue(o, name)) === val }),
-    gt: (val: number): ConditionExpression => ({ type: 'comparison', description: `${name} > ${val}`, evaluate: (o: ResearchObservation) => Number(extractFeatureValue(o, name)) > val }),
-    gte: (val: number): ConditionExpression => ({ type: 'comparison', description: `${name} >= ${val}`, evaluate: (o: ResearchObservation) => Number(extractFeatureValue(o, name)) >= val }),
-    lt: (val: number): ConditionExpression => ({ type: 'comparison', description: `${name} < ${val}`, evaluate: (o: ResearchObservation) => Number(extractFeatureValue(o, name)) < val }),
-    lte: (val: number): ConditionExpression => ({ type: 'comparison', description: `${name} <= ${val}`, evaluate: (o: ResearchObservation) => Number(extractFeatureValue(o, name)) <= val })
+    eq: (val: number): ConditionExpression<S> => ({ type: 'comparison', scope, description: `${name} == ${val}`, evaluate: (o: ResearchObservation) => Number(extractFeatureValue(o, name)) === val }),
+    gt: (val: number): ConditionExpression<S> => ({ type: 'comparison', scope, description: `${name} > ${val}`, evaluate: (o: ResearchObservation) => Number(extractFeatureValue(o, name)) > val }),
+    gte: (val: number): ConditionExpression<S> => ({ type: 'comparison', scope, description: `${name} >= ${val}`, evaluate: (o: ResearchObservation) => Number(extractFeatureValue(o, name)) >= val }),
+    lt: (val: number): ConditionExpression<S> => ({ type: 'comparison', scope, description: `${name} < ${val}`, evaluate: (o: ResearchObservation) => Number(extractFeatureValue(o, name)) < val }),
+    lte: (val: number): ConditionExpression<S> => ({ type: 'comparison', scope, description: `${name} <= ${val}`, evaluate: (o: ResearchObservation) => Number(extractFeatureValue(o, name)) <= val })
   };
 }
 
-function createStringFeatureBuilder(name: string): StringFeatureBuilder {
+function createStringFeatureBuilder<S extends ConditionScope>(name: string, scope: S): StringFeatureBuilder<S> {
   return {
-    eq: (val: string): ConditionExpression => ({ type: 'comparison', description: `${name} == '${val}'`, evaluate: (o: ResearchObservation) => String(extractFeatureValue(o, name)) === val }),
-    neq: (val: string): ConditionExpression => ({ type: 'comparison', description: `${name} != '${val}'`, evaluate: (o: ResearchObservation) => String(extractFeatureValue(o, name)) !== val }),
-    in: (vals: readonly string[]): ConditionExpression => ({
+    eq: (val: string): ConditionExpression<S> => ({ type: 'comparison', scope, description: `${name} == '${val}'`, evaluate: (o: ResearchObservation) => String(extractFeatureValue(o, name)) === val }),
+    neq: (val: string): ConditionExpression<S> => ({ type: 'comparison', scope, description: `${name} != '${val}'`, evaluate: (o: ResearchObservation) => String(extractFeatureValue(o, name)) !== val }),
+    in: (vals: readonly string[]): ConditionExpression<S> => ({
       type: 'comparison',
+      scope,
       description: `${name} IN [${vals.join(', ')}]`,
       evaluate: (o: ResearchObservation) => vals.includes(String(extractFeatureValue(o, name)))
     })
@@ -89,33 +99,33 @@ function createStringFeatureBuilder(name: string): StringFeatureBuilder {
 /**
  * Builds conditions on predictive context features (available at observation time, zero outcome leakage).
  */
-export function contextFeature(name: ContextStringFeature): StringFeatureBuilder;
-export function contextFeature(name: ContextNumericFeature): NumberFeatureBuilder;
-export function contextFeature(name: ContextFeatureName): StringFeatureBuilder | NumberFeatureBuilder {
-  return name === 'atr' ? createNumericFeatureBuilder(name) : createStringFeatureBuilder(name);
+export function contextFeature(name: ContextStringFeature): StringFeatureBuilder<'predictive'>;
+export function contextFeature(name: ContextNumericFeature): NumberFeatureBuilder<'predictive'>;
+export function contextFeature(name: ContextFeatureName): StringFeatureBuilder<'predictive'> | NumberFeatureBuilder<'predictive'> {
+  return name === 'atr' ? createNumericFeatureBuilder(name, 'predictive') : createStringFeatureBuilder(name, 'predictive');
 }
 
 /**
  * Builds conditions on ex-post outcome metrics for outcome-stratification analysis only.
  */
-export function outcomeFeature(name: OutcomeNumericFeature): NumberFeatureBuilder {
-  return createNumericFeatureBuilder(name);
+export function outcomeFeature(name: OutcomeNumericFeature): NumberFeatureBuilder<'outcome'> {
+  return createNumericFeatureBuilder(name, 'outcome');
 }
 
-export function feature(name: ContextStringFeature): StringFeatureBuilder;
-export function feature(name: ContextNumericFeature | OutcomeNumericFeature): NumberFeatureBuilder;
-export function feature(name: string): StringFeatureBuilder | NumberFeatureBuilder {
-  const isNumeric = ['atr', 'mfeAtr', 'maeAtr'].includes(name);
-  return isNumeric ? createNumericFeatureBuilder(name) : createStringFeatureBuilder(name);
+export function feature(name: ContextStringFeature): StringFeatureBuilder<'predictive'>;
+export function feature(name: ContextNumericFeature): NumberFeatureBuilder<'predictive'>;
+export function feature(name: ContextFeatureName): StringFeatureBuilder<'predictive'> | NumberFeatureBuilder<'predictive'> {
+  return contextFeature(name as ContextStringFeature);
 }
 
-export function htfTrend(tf: Timeframe): StringFeatureBuilder {
+export function htfTrend(tf: Timeframe): StringFeatureBuilder<'predictive'> {
   const getTrend = (c: ContextSnapshot) => c.htfContext?.[tf]?.trend ?? 'sideways';
   return {
-    eq: (val: string): ConditionExpression => ({ type: 'comparison', description: `htfTrend(${tf}) == '${val}'`, evaluate: (o: ResearchObservation) => getTrend(o.context) === val }),
-    neq: (val: string): ConditionExpression => ({ type: 'comparison', description: `htfTrend(${tf}) != '${val}'`, evaluate: (o: ResearchObservation) => getTrend(o.context) !== val }),
-    in: (vals: readonly string[]): ConditionExpression => ({
+    eq: (val: string): ConditionExpression<'predictive'> => ({ type: 'comparison', scope: 'predictive', description: `htfTrend(${tf}) == '${val}'`, evaluate: (o: ResearchObservation) => getTrend(o.context) === val }),
+    neq: (val: string): ConditionExpression<'predictive'> => ({ type: 'comparison', scope: 'predictive', description: `htfTrend(${tf}) != '${val}'`, evaluate: (o: ResearchObservation) => getTrend(o.context) !== val }),
+    in: (vals: readonly string[]): ConditionExpression<'predictive'> => ({
       type: 'comparison',
+      scope: 'predictive',
       description: `htfTrend(${tf}) IN [${vals.join(', ')}]`,
       evaluate: (o: ResearchObservation) => vals.includes(getTrend(o.context))
     })
@@ -134,7 +144,7 @@ export interface ConditionEvaluationResult {
 
 export function evaluateCondition(
   observations: readonly ResearchObservation[],
-  condition: ConditionExpression
+  condition: PredictiveCondition
 ): ConditionEvaluationResult {
   const total = observations.length;
   if (total === 0) {
