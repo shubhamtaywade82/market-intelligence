@@ -73,13 +73,13 @@ describe('Event Interaction & Incremental Information', () => {
     };
 
     const obsA = [
-      { event: { id: 'fvg-1', type: 'fvg', symbol: 'BTC', timeframe: '15m' as const, detectedAt: 1000, originIndex: 10, direction: 'bullish' as const }, outcome: baseOutcomeSuccess },
-      { event: { id: 'fvg-2', type: 'fvg', symbol: 'BTC', timeframe: '15m' as const, detectedAt: 2000, originIndex: 20, direction: 'bullish' as const }, outcome: baseOutcomeFail }
+      { event: { id: 'fvg-1', type: 'fvg', symbol: 'BTC', timeframe: '15m' as const, detectedAt: 1000, originIndex: 10, originTimestamp: 1000, availableAtIndex: 10, availableAtTimestamp: 1000, direction: 'bullish' as const }, outcome: baseOutcomeSuccess },
+      { event: { id: 'fvg-2', type: 'fvg', symbol: 'BTC', timeframe: '15m' as const, detectedAt: 2000, originIndex: 20, originTimestamp: 2000, availableAtIndex: 20, availableAtTimestamp: 2000, direction: 'bullish' as const }, outcome: baseOutcomeFail }
     ];
 
     const obsB = [
       // Co-occurs with fvg-1 at index 11 (gap = 1 <= 3)
-      { event: { id: 'mss-1', type: 'mss', symbol: 'BTC', timeframe: '15m' as const, detectedAt: 1100, originIndex: 11, direction: 'bullish' as const }, outcome: baseOutcomeSuccess }
+      { event: { id: 'mss-1', type: 'mss', symbol: 'BTC', timeframe: '15m' as const, detectedAt: 1100, originIndex: 11, originTimestamp: 1100, availableAtIndex: 11, availableAtTimestamp: 1100, direction: 'bullish' as const }, outcome: baseOutcomeSuccess }
     ];
 
     const interaction = analyzeEventPairInteraction(obsA, obsB, 'hit2R', 3);
@@ -105,16 +105,16 @@ describe('Event Interaction & Incremental Information', () => {
 
     // 4 anchor opportunities: 2 with secondary condition (both win), 2 without secondary condition (1 win, 1 loss)
     const anchorObs = [
-      { event: { id: 'a1', type: 'fvg', symbol: 'BTC', timeframe: '15m' as const, detectedAt: 1000, originIndex: 10, availableAtIndex: 10, direction: 'bullish' as const }, outcome: success },
-      { event: { id: 'a2', type: 'fvg', symbol: 'BTC', timeframe: '15m' as const, detectedAt: 2000, originIndex: 20, availableAtIndex: 20, direction: 'bullish' as const }, outcome: success },
-      { event: { id: 'a3', type: 'fvg', symbol: 'BTC', timeframe: '15m' as const, detectedAt: 3000, originIndex: 30, availableAtIndex: 30, direction: 'bullish' as const }, outcome: success },
-      { event: { id: 'a4', type: 'fvg', symbol: 'BTC', timeframe: '15m' as const, detectedAt: 4000, originIndex: 40, availableAtIndex: 40, direction: 'bullish' as const }, outcome: fail }
+      { event: { id: 'a1', type: 'fvg', symbol: 'BTC', timeframe: '15m' as const, detectedAt: 1000, originIndex: 10, originTimestamp: 1000, availableAtIndex: 10, availableAtTimestamp: 1000, direction: 'bullish' as const }, outcome: success },
+      { event: { id: 'a2', type: 'fvg', symbol: 'BTC', timeframe: '15m' as const, detectedAt: 2000, originIndex: 20, originTimestamp: 2000, availableAtIndex: 20, availableAtTimestamp: 2000, direction: 'bullish' as const }, outcome: success },
+      { event: { id: 'a3', type: 'fvg', symbol: 'BTC', timeframe: '15m' as const, detectedAt: 3000, originIndex: 30, originTimestamp: 3000, availableAtIndex: 30, availableAtTimestamp: 3000, direction: 'bullish' as const }, outcome: success },
+      { event: { id: 'a4', type: 'fvg', symbol: 'BTC', timeframe: '15m' as const, detectedAt: 4000, originIndex: 40, originTimestamp: 4000, availableAtIndex: 40, availableAtTimestamp: 4000, direction: 'bullish' as const }, outcome: fail }
     ];
 
     // Secondary events co-occur with a1 and a2
     const secondaryEvents: BaseEvent[] = [
-      { id: 's1', type: 'bos', symbol: 'BTC', timeframe: '15m' as const, detectedAt: 950, originIndex: 9, availableAtIndex: 9, direction: 'bullish' as const },
-      { id: 's2', type: 'bos', symbol: 'BTC', timeframe: '15m' as const, detectedAt: 1950, originIndex: 19, availableAtIndex: 19, direction: 'bullish' as const }
+      { id: 's1', type: 'bos', symbol: 'BTC', timeframe: '15m' as const, detectedAt: 950, originIndex: 9, originTimestamp: 950, availableAtIndex: 9, availableAtTimestamp: 950, direction: 'bullish' as const },
+      { id: 's2', type: 'bos', symbol: 'BTC', timeframe: '15m' as const, detectedAt: 1950, originIndex: 19, originTimestamp: 1950, availableAtIndex: 19, availableAtTimestamp: 1950, direction: 'bullish' as const }
     ];
 
     const result = analyzeAnchorInteraction(anchorObs, secondaryEvents, { maxBarGap: 2, targetMetric: 'hit2R' });

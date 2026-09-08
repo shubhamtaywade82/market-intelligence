@@ -27,21 +27,38 @@ function makeCandle(ts: number, open: number, high: number, low: number, close: 
   };
 }
 
+function makeEvent<T extends BaseEvent = BaseEvent>(id: string, overrides: Partial<T> = {}): T {
+  return {
+    id,
+    type: 'test',
+    symbol: 'BTCUSDT',
+    timeframe: '15m',
+    detectedAt: 1000,
+    originIndex: 0,
+    originTimestamp: 1000,
+    availableAtIndex: 0,
+    availableAtTimestamp: 1000,
+    direction: 'bullish',
+    ...overrides
+  } as T;
+}
+
+const cfg = (horizonCandles: number, ambiguityPolicy: 'pessimistic' | 'optimistic' | 'ambiguous' = 'pessimistic') => ({
+  horizonCandles,
+  targetR: 2.0,
+  stopAtrMultiplier: 1.0,
+  ambiguityPolicy
+});
+
 describe('Typed Outcome Evaluators & Competing Risk', () => {
   it('evaluates FVG with real fill depths, invalidation, and reaction', () => {
-    const fvg: FvgEvent = {
-      id: 'fvg-1',
+    const fvg = makeEvent<FvgEvent>('fvg-1', {
       type: 'fvg',
-      symbol: 'BTCUSDT',
-      timeframe: '15m',
-      detectedAt: 1000,
-      originIndex: 0,
-      direction: 'bullish',
       top: new Decimal(100),
       bottom: new Decimal(80),
       consequentEncroachment: new Decimal(90),
       size: new Decimal(20)
-    };
+    });
 
     const candles: Candle[] = [
       makeCandle(1000, 75, 80, 70, 78), // origin (0)
@@ -49,12 +66,7 @@ describe('Typed Outcome Evaluators & Competing Risk', () => {
       makeCandle(3000, 92, 150, 90, 145) // expansion to 150 (+50 points from top 100 => 2.5R)
     ];
 
-    const outcome = evaluateFvgOutcome(fvg, candles, new Decimal(10), {
-      horizonCandles: 2,
-      targetR: 2.0,
-      stopAtrMultiplier: 1.0,
-      ambiguityPolicy: 'pessimistic'
-    });
+    const outcome = evaluateFvgOutcome(fvg, candles, new Decimal(10), cfg(2));
 
     expect(outcome.firstTouchBars).toBe(1);
     expect(outcome.fill25).toBe(true);
@@ -65,19 +77,13 @@ describe('Typed Outcome Evaluators & Competing Risk', () => {
   });
 
   it('evaluates OrderBlock penetration and breaker block conversion', () => {
-    const ob: OrderBlockEvent = {
-      id: 'ob-1',
+    const ob = makeEvent<OrderBlockEvent>('ob-1', {
       type: 'order_block',
-      symbol: 'BTCUSDT',
-      timeframe: '15m',
-      detectedAt: 1000,
-      originIndex: 0,
-      direction: 'bullish',
       top: new Decimal(100),
       bottom: new Decimal(90),
       size: new Decimal(10),
       originCandleIndex: 0
-    };
+    });
 
     const candles: Candle[] = [
       makeCandle(1000, 95, 100, 90, 98),
@@ -91,15 +97,7 @@ describe('Typed Outcome Evaluators & Competing Risk', () => {
   });
 
   it('evaluates competing risk and resolves same-candle collision under pessimistic policy', () => {
-    const ev = {
-      id: 'gen-1',
-      type: 'test',
-      symbol: 'BTC',
-      timeframe: '15m' as const,
-      detectedAt: 1000,
-      originIndex: 0,
-      direction: 'bullish' as const
-    };
+    const ev = makeEvent('gen-1');
 
     // Entry at close = 100. Target = 100 + 2*10 = 120. Stop = 100 - 1*10 = 90.
     const candlesPessimistic: Candle[] = [
@@ -107,36 +105,16 @@ describe('Typed Outcome Evaluators & Competing Risk', () => {
       makeCandle(2000, 100, 125, 85, 110) // Single bar breaches both high 125 >= 120 AND low 85 <= 90
     ];
 
-    const outPessimistic = evaluateGenericOutcome(ev, candlesPessimistic, new Decimal(10), {
-      horizonCandles: 2,
-      targetR: 2.0,
-      stopAtrMultiplier: 1.0,
-      ambiguityPolicy: 'pessimistic'
-    });
-
+    const outPessimistic = evaluateGenericOutcome(ev, candlesPessimistic, new Decimal(10), cfg(2, 'pessimistic'));
     expect(outPessimistic.isAmbiguous).toBe(true);
     expect(outPessimistic.firstHit).toBe('stop_first');
 
-    const outOptimistic = evaluateGenericOutcome(ev, candlesPessimistic, new Decimal(10), {
-      horizonCandles: 2,
-      targetR: 2.0,
-      stopAtrMultiplier: 1.0,
-      ambiguityPolicy: 'optimistic'
-    });
-
+    const outOptimistic = evaluateGenericOutcome(ev, candlesPessimistic, new Decimal(10), cfg(2, 'optimistic'));
     expect(outOptimistic.firstHit).toBe('target_first');
   });
 
   it('ensures stop breach on earlier bar prevents subsequent target_first and freezes MFE', () => {
-    const ev = {
-      id: 'barrier-1',
-      type: 'test',
-      symbol: 'BTC',
-      timeframe: '15m' as const,
-      detectedAt: 1000,
-      originIndex: 0,
-      direction: 'bullish' as const
-    };
+    const ev = makeEvent('barrier-1');
 
     // Entry at close = 100. Target = 120 (2R). Stop = 90 (1R).
     const candles: Candle[] = [
@@ -145,12 +123,7 @@ describe('Typed Outcome Evaluators & Competing Risk', () => {
       makeCandle(3000, 89, 135, 88, 130)  // bar 2: high = 135 reaches target 120, BUT trade was stopped on bar 1!
     ];
 
-    const outcome = evaluateGenericOutcome(ev, candles, new Decimal(10), {
-      horizonCandles: 3,
-      targetR: 2.0,
-      stopAtrMultiplier: 1.0,
-      ambiguityPolicy: 'pessimistic'
-    });
+    const outcome = evaluateGenericOutcome(ev, candles, new Decimal(10), cfg(3));
 
     expect(outcome.firstHit).toBe('stop_first');
     expect(outcome.timeToFirstHitBars).toBe(1);
@@ -160,19 +133,13 @@ describe('Typed Outcome Evaluators & Competing Risk', () => {
   });
 
   it('halts zone penetration measurement once FVG is invalidated', () => {
-    const fvg: FvgEvent = {
-      id: 'fvg-inval',
+    const fvg = makeEvent<FvgEvent>('fvg-inval', {
       type: 'fvg',
-      symbol: 'BTCUSDT',
-      timeframe: '15m',
-      detectedAt: 1000,
-      originIndex: 0,
-      direction: 'bullish',
       top: new Decimal(100),
       bottom: new Decimal(90),
       consequentEncroachment: new Decimal(95),
       size: new Decimal(10)
-    };
+    });
 
     const candles: Candle[] = [
       makeCandle(1000, 90, 95, 88, 92),
@@ -197,19 +164,15 @@ describe('Direction-Aware Matched Controls', () => {
       p = p.plus(1);
     }
 
-    const bullEvent: FvgEvent = {
-      id: 'bull-1',
+    const bullEvent = makeEvent<FvgEvent>('bull-1', {
       type: 'fvg',
-      symbol: 'BTC',
-      timeframe: '15m',
-      detectedAt: 1000,
       originIndex: 10,
-      direction: 'bullish',
+      availableAtIndex: 10,
       top: new Decimal(110),
       bottom: new Decimal(105),
       consequentEncroachment: new Decimal(107.5),
       size: new Decimal(5)
-    };
+    });
 
     const controls = generateMatchedControls([bullEvent], candles);
     expect(controls).toHaveLength(1);
@@ -224,8 +187,8 @@ describe('Direction-Aware Matched Controls', () => {
       candles.push(makeCandle(1000 + i * 60000, 100, 102, 98, 100));
     }
 
-    const ev1: BaseEvent = { id: 'e1', type: 'fvg', symbol: 'BTC', timeframe: '15m', detectedAt: 1000, originIndex: 10, direction: 'bullish' };
-    const ev2: BaseEvent = { id: 'e2', type: 'fvg', symbol: 'BTC', timeframe: '15m', detectedAt: 2000, originIndex: 12, direction: 'bullish' };
+    const ev1 = makeEvent('e1', { type: 'fvg', originIndex: 10, availableAtIndex: 10 });
+    const ev2 = makeEvent('e2', { type: 'fvg', detectedAt: 2000, originIndex: 12, originTimestamp: 2000, availableAtIndex: 12, availableAtTimestamp: 2000 });
 
     const controls = generateMatchedControls([ev1, ev2], candles, undefined, { matchTrendRegime: true });
     expect(controls).toHaveLength(2);
@@ -278,15 +241,7 @@ describe('Cluster-Aware Statistical Inference', () => {
   });
 
   it('separates market excursion behavior from trade execution and resolves path collisions', () => {
-    const ev: BaseEvent = {
-      id: 'collision-ev',
-      type: 'test',
-      symbol: 'BTCUSDT',
-      timeframe: '15m',
-      detectedAt: 1000,
-      originIndex: 0,
-      direction: 'bullish'
-    };
+    const ev = makeEvent('collision-ev', { type: 'control' });
     // Candle 0: close 100
     // Candle 1: high 115 (>= target 110 at +2R), low 90 (<= stop 95 at -1R) -> collision!
     const candles: Candle[] = [
@@ -294,12 +249,7 @@ describe('Cluster-Aware Statistical Inference', () => {
       makeCandle(2000, 100, 115, 90, 105)
     ];
 
-    const pessOutcome = evaluateGenericOutcome(ev, candles, new Decimal(5), {
-      horizonCandles: 5,
-      targetR: 2.0,
-      stopAtrMultiplier: 1.0,
-      ambiguityPolicy: 'pessimistic'
-    });
+    const pessOutcome = evaluateGenericOutcome(ev, candles, new Decimal(5), cfg(5, 'pessimistic'));
     expect(pessOutcome.collision).toBe(true);
     expect(pessOutcome.isAmbiguous).toBe(true);
     expect(pessOutcome.pathResolution).toBe('ohlc_pessimistic');
@@ -307,24 +257,14 @@ describe('Cluster-Aware Statistical Inference', () => {
     expect(pessOutcome.targetFirst).toBe(false);
     expect(pessOutcome.targetHitR.toNumber()).toBe(-1); // -1R (stop multiplier)
 
-    const optOutcome = evaluateGenericOutcome(ev, candles, new Decimal(5), {
-      horizonCandles: 5,
-      targetR: 2.0,
-      stopAtrMultiplier: 1.0,
-      ambiguityPolicy: 'optimistic'
-    });
+    const optOutcome = evaluateGenericOutcome(ev, candles, new Decimal(5), cfg(5, 'optimistic'));
     expect(optOutcome.collision).toBe(true);
     expect(optOutcome.pathResolution).toBe('ohlc_optimistic');
     expect(optOutcome.targetFirst).toBe(true);
     expect(optOutcome.stopFirst).toBe(false);
     expect(optOutcome.targetHitR.toNumber()).toBe(2);
 
-    const ambigOutcome = evaluateGenericOutcome(ev, candles, new Decimal(5), {
-      horizonCandles: 5,
-      targetR: 2.0,
-      stopAtrMultiplier: 1.0,
-      ambiguityPolicy: 'ambiguous'
-    });
+    const ambigOutcome = evaluateGenericOutcome(ev, candles, new Decimal(5), cfg(5, 'ambiguous'));
     expect(ambigOutcome.pathResolution).toBe('ambiguous');
     expect(ambigOutcome.firstHit).toBe('simultaneous_collision');
 

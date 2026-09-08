@@ -52,7 +52,7 @@ export function createResearchObservations(
   const configHash = computeDeterministicHash(JSON.stringify(config));
 
   return events.map(ev => {
-    const evalIndex = ev.availableAtIndex ?? ev.originIndex;
+    const evalIndex = ev.availableAtIndex;
     const context = extractContextSnapshot(candles, evalIndex, htfCandlesMap);
     const outcome = evaluateEventOutcome(ev, candles, context.atr, config);
     const provenance: Provenance = {

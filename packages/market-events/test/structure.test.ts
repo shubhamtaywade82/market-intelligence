@@ -4,7 +4,7 @@ import { detectSwings, detectMultiScaleSwings } from '../src/swings.js';
 import { detectStructureBreaks, detectBos, detectChoch, detectMss } from '../src/structure.js';
 import { detectOrderBlocks } from '../src/order-block.js';
 import { detectLiquiditySweeps, buildLiquidityPools } from '../src/liquidity.js';
-import type { Candle, SwingPoint } from '../src/types.js';
+import { validateEventCausality, type Candle, type SwingPoint } from '../src/types.js';
 
 function makeCandle(ts: number, open: number, high: number, low: number, close: number): Candle {
   return {
@@ -122,6 +122,27 @@ describe('Deterministic Structure Engine', () => {
     expect(bosBreaks.every(b => b.type === 'bos')).toBe(true);
     expect(chochBreaks.every(b => b.type === 'choch')).toBe(true);
     expect(mssBreaks.every(b => b.type === 'mss')).toBe(true);
+  });
+
+  it('enforces causal availability invariants (availableAtIndex >= originIndex) across detectors', () => {
+    const candles: Candle[] = [
+      makeCandle(1000, 100, 105, 98, 102),
+      makeCandle(2000, 102, 110, 101, 109),
+      makeCandle(3000, 109, 106, 95, 96),
+      makeCandle(4000, 96, 108, 96, 107),
+      makeCandle(5000, 107, 115, 106, 114)
+    ];
+
+    const swings = detectSwings(candles, { leftBars: 1, rightBars: 1 });
+    const breaks = detectStructureBreaks(candles, swings, { symbol: 'BTCUSDT', timeframe: '15m' });
+    const obs = detectOrderBlocks(candles, breaks, { symbol: 'BTCUSDT', timeframe: '15m' });
+    const sweeps = detectLiquiditySweeps(candles, swings, { symbol: 'BTCUSDT', timeframe: '15m' });
+
+    for (const ev of [...breaks, ...obs, ...sweeps]) {
+      expect(() => validateEventCausality(ev)).not.toThrow();
+      expect(ev.availableAtIndex).toBeGreaterThanOrEqual(ev.originIndex);
+      expect(ev.availableAtTimestamp).toBeGreaterThanOrEqual(ev.originTimestamp);
+    }
   });
 });
 

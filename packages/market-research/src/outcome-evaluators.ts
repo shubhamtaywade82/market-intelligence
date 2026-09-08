@@ -61,7 +61,7 @@ function evaluateZoneTrajectory(
   let pathResolution: PathResolution = 'exact';
   let timeToTarget: number | null = null, timeToStop: number | null = null;
 
-  const evalIndex = event.availableAtIndex ?? event.originIndex;
+  const evalIndex = event.availableAtIndex;
   const horizon = Math.min(candles.length, evalIndex + 1 + config.horizonCandles);
   for (let i = evalIndex + 1; i < horizon; i++) {
     const c = candles[i]!;
@@ -133,6 +133,9 @@ function computeOutcomeStats(
     targetHit1R: traj.mfe.gte(risk),
     targetHit2R: traj.mfe.gte(risk.times(2)),
     targetHit3R: traj.mfe.gte(risk.times(3)),
+    reached1R: traj.firstHit === 'target_first' || traj.mfe.gte(risk),
+    reached2R: traj.firstHit === 'target_first' || (traj.firstHit !== 'stop_first' && traj.mfe.gte(risk.times(2))),
+    reached3R: traj.firstHit !== 'stop_first' && traj.mfe.gte(risk.times(3)),
     hit1R: traj.firstHit === 'target_first' || traj.mfe.gte(risk),
     hit2R: traj.firstHit === 'target_first' || (traj.firstHit !== 'stop_first' && traj.mfe.gte(risk.times(2))),
     hit3R: traj.firstHit !== 'stop_first' && traj.mfe.gte(risk.times(3))

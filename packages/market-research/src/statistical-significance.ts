@@ -153,6 +153,53 @@ export function calculateClusterBootstrapComparison(
   return { pValue, standardError: Math.sqrt(variance), confidenceInterval: { lower: uplifts[lowIdx]!, upper: uplifts[highIdx]! } };
 }
 
+export interface MatchedPairObservation {
+  readonly eventHit: boolean | number;
+  readonly controlHit: boolean | number;
+  readonly clusterId?: string | undefined;
+}
+
+export interface PairedBootstrapResult {
+  readonly meanDifference: number;
+  readonly standardError: number;
+  readonly pValue: number;
+  readonly confidenceInterval: { lower: number; upper: number };
+}
+
+export function calculatePairedBootstrapComparison(
+  pairs: readonly MatchedPairObservation[],
+  iterations = 1000
+): PairedBootstrapResult {
+  const n = pairs.length;
+  if (n === 0) return { meanDifference: 0, standardError: 0, pValue: 1.0, confidenceInterval: { lower: 0, upper: 0 } };
+
+  const diffs = pairs.map(p => Number(p.eventHit) - Number(p.controlHit));
+  const meanDiff = diffs.reduce((s, d) => s + d, 0) / n;
+  const rand = createMulberry32(42);
+  const bootMeans: number[] = [];
+
+  for (let b = 0; b < iterations; b++) {
+    let sum = 0;
+    for (let i = 0; i < n; i++) sum += diffs[Math.floor(rand() * n)]!;
+    bootMeans.push(sum / n);
+  }
+
+  bootMeans.sort((a, b) => a - b);
+  const lowIdx = Math.floor(iterations * 0.025);
+  const highIdx = Math.min(iterations - 1, Math.ceil(iterations * 0.975));
+  const bootMean = bootMeans.reduce((s, m) => s + m, 0) / iterations;
+  const variance = bootMeans.reduce((s, m) => s + (m - bootMean) ** 2, 0) / iterations;
+  const nullCount = bootMeans.filter(m => m <= 0).length;
+  const pValue = Math.min(1.0, Math.max(0.001, (nullCount + 1) / (iterations + 1)));
+
+  return {
+    meanDifference: meanDiff,
+    standardError: Math.sqrt(variance),
+    pValue,
+    confidenceInterval: { lower: bootMeans[lowIdx]!, upper: bootMeans[highIdx]! }
+  };
+}
+
 export interface CompareBaselineInput {
   readonly eventHits: number;
   readonly eventTrials: number;

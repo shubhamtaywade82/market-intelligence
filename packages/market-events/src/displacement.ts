@@ -46,6 +46,7 @@ export function detectDisplacement(
         timeframe: options.timeframe,
         detectedAt: c.timestamp,
         originIndex: i,
+        originTimestamp: c.timestamp,
         availableAtIndex: i,
         availableAtTimestamp: c.timestamp,
         direction: isBull ? 'bullish' : 'bearish',

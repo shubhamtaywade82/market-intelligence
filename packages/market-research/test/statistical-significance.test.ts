@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculateWilsonInterval, compareAgainstBaseline } from '../src/statistical-significance.js';
+import { calculateWilsonInterval, compareAgainstBaseline, calculatePairedBootstrapComparison } from '../src/statistical-significance.js';
 
 describe('Statistical Significance & Wilson Intervals', () => {
   it('calculates Wilson score confidence interval around binomial proportions', () => {
@@ -26,5 +26,20 @@ describe('Statistical Significance & Wilson Intervals', () => {
     const comparison = compareAgainstBaseline(3, 4, 2, 4);
     expect(comparison.isStatisticallySignificant).toBe(false);
     expect(comparison.pValueEstimate).toBeGreaterThan(0.05);
+  });
+
+  it('computes paired differences and bootstrap CI for matched event-control pairs', () => {
+    const pairs = [
+      { eventHit: 1, controlHit: 0 },
+      { eventHit: 1, controlHit: 0 },
+      { eventHit: 1, controlHit: 1 },
+      { eventHit: 0, controlHit: 0 },
+      { eventHit: 1, controlHit: 0 }
+    ];
+
+    const res = calculatePairedBootstrapComparison(pairs, 500);
+    expect(res.meanDifference).toBe(0.6); // 3 of 5 net positive difference
+    expect(res.pValue).toBeLessThan(0.05);
+    expect(res.confidenceInterval.lower).toBeGreaterThanOrEqual(0);
   });
 });

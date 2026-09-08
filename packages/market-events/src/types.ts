@@ -30,6 +30,17 @@ export type MarketEventType =
   | 'harmonic_pattern'
   | 'control';
 
+export interface EventTimeline {
+  readonly originIndex: number;
+  readonly originTimestamp: number;
+  readonly formedAtIndex?: number | undefined;
+  readonly formedAtTimestamp?: number | undefined;
+  readonly confirmedAtIndex?: number | undefined;
+  readonly confirmedAtTimestamp?: number | undefined;
+  readonly availableAtIndex: number;
+  readonly availableAtTimestamp: number;
+}
+
 export interface BaseEvent {
   readonly id: string;
   readonly type: MarketEventType;
@@ -38,9 +49,20 @@ export interface BaseEvent {
   readonly timeframe: Timeframe;
   readonly detectedAt: number;
   readonly originIndex: number;
-  readonly availableAtIndex?: number | undefined;
-  readonly availableAtTimestamp?: number | undefined;
+  readonly originTimestamp: number;
+  readonly availableAtIndex: number;
+  readonly availableAtTimestamp: number;
+  readonly timeline?: EventTimeline | undefined;
   readonly direction: EventDirection;
+}
+
+export function validateEventCausality(event: BaseEvent): void {
+  if (event.availableAtIndex < event.originIndex) {
+    throw new Error(`Causal violation: availableAtIndex (${event.availableAtIndex}) < originIndex (${event.originIndex}) in ${event.id}`);
+  }
+  if (event.availableAtTimestamp < event.originTimestamp) {
+    throw new Error(`Causal violation: availableAtTimestamp (${event.availableAtTimestamp}) < originTimestamp (${event.originTimestamp}) in ${event.id}`);
+  }
 }
 
 export interface FvgEvent extends BaseEvent {
@@ -51,6 +73,7 @@ export interface FvgEvent extends BaseEvent {
   readonly size: Decimal;
 }
 
+export type SwingType = 'high' | 'low';
 export type SwingScale = 'micro' | 'minor' | 'intermediate' | 'major';
 export type StructureScope = 'internal' | 'external';
 export type SwingStrength = SwingScale | StructureScope;

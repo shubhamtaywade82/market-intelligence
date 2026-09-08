@@ -1,6 +1,6 @@
 import { Decimal } from 'decimal.js';
 import type { BaseEvent, Candle } from '@nemesis-oss/market-events';
-import type { OutcomeConfig, BaseOutcome, DirectionalOutcome, PathResolution } from './types.js';
+import type { OutcomeConfig, BaseOutcome, DirectionalOutcome, PathResolution, TradeExecutionOutcome } from './types.js';
 
 export const DEFAULT_OUTCOME_CONFIG: OutcomeConfig = {
   horizonCandles: 24,
@@ -129,7 +129,7 @@ export function evaluateGenericOutcome(
   causalAtr: Decimal,
   config: OutcomeConfig = DEFAULT_OUTCOME_CONFIG
 ): DirectionalOutcome {
-  const evalIndex = event.availableAtIndex ?? event.originIndex;
+  const evalIndex = event.availableAtIndex;
   const c = candles[evalIndex];
   const entry = c ? c.close : new Decimal(0);
   const traj = evaluateTrajectory(candles, {

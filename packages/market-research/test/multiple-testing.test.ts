@@ -84,4 +84,19 @@ describe('Multiple Testing Correction & Hypothesis Registry', () => {
     expect(adjustBenjaminiHochberg([])).toHaveLength(0);
     expect(adjustHolmBonferroni([])).toHaveLength(0);
   });
+
+  it('adjusts p-values within explicit hypothesis families', () => {
+    const registry = new HypothesisRegistry();
+    registry.registerFamilyTest({ id: 'fvg-basic', family: 'fvg-core', description: 'FVG core', pValue: 0.01 });
+    registry.registerFamilyTest({ id: 'fvg-session', family: 'fvg-core', description: 'FVG session', pValue: 0.04 });
+    registry.registerFamilyTest({ id: 'bos-regime', family: 'bos-core', description: 'BOS regime', pValue: 0.02 });
+
+    const familyAdjusted = registry.applyByFamily('benjamini_hochberg', 0.05);
+    expect(familyAdjusted.has('fvg-core')).toBe(true);
+    expect(familyAdjusted.has('bos-core')).toBe(true);
+
+    const fvgResults = familyAdjusted.get('fvg-core')!;
+    expect(fvgResults).toHaveLength(2);
+    expect(fvgResults[0]!.isSignificant).toBe(true);
+  });
 });

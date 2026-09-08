@@ -20,7 +20,7 @@ export function detectOrderBlocks(
   const blocks: OrderBlockEvent[] = [];
 
   for (const brk of breaks) {
-    const breakIndex = brk.originIndex;
+    const breakIndex = brk.availableAtIndex;
     const searchStart = Math.max(0, breakIndex - lookback);
 
     if (brk.direction === 'bullish') {
@@ -34,9 +34,20 @@ export function detectOrderBlocks(
             symbol: options.symbol,
             timeframe: options.timeframe,
             detectedAt: brk.detectedAt,
-            originIndex: breakIndex,
-            availableAtIndex: brk.availableAtIndex ?? breakIndex,
-            availableAtTimestamp: brk.availableAtTimestamp ?? brk.detectedAt,
+            originIndex: j,
+            originTimestamp: c.timestamp,
+            availableAtIndex: brk.availableAtIndex,
+            availableAtTimestamp: brk.availableAtTimestamp,
+            timeline: {
+              originIndex: j,
+              originTimestamp: c.timestamp,
+              formedAtIndex: j,
+              formedAtTimestamp: c.timestamp,
+              confirmedAtIndex: breakIndex,
+              confirmedAtTimestamp: brk.detectedAt,
+              availableAtIndex: brk.availableAtIndex,
+              availableAtTimestamp: brk.availableAtTimestamp
+            },
             direction: 'bullish',
             top: c.high,
             bottom: c.low,
@@ -57,9 +68,20 @@ export function detectOrderBlocks(
             symbol: options.symbol,
             timeframe: options.timeframe,
             detectedAt: brk.detectedAt,
-            originIndex: breakIndex,
-            availableAtIndex: brk.availableAtIndex ?? breakIndex,
-            availableAtTimestamp: brk.availableAtTimestamp ?? brk.detectedAt,
+            originIndex: j,
+            originTimestamp: c.timestamp,
+            availableAtIndex: brk.availableAtIndex,
+            availableAtTimestamp: brk.availableAtTimestamp,
+            timeline: {
+              originIndex: j,
+              originTimestamp: c.timestamp,
+              formedAtIndex: j,
+              formedAtTimestamp: c.timestamp,
+              confirmedAtIndex: breakIndex,
+              confirmedAtTimestamp: brk.detectedAt,
+              availableAtIndex: brk.availableAtIndex,
+              availableAtTimestamp: brk.availableAtTimestamp
+            },
             direction: 'bearish',
             top: c.high,
             bottom: c.low,

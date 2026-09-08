@@ -78,7 +78,7 @@ export function generateMatchedControls(
   config: OutcomeConfig = DEFAULT_OUTCOME_CONFIG,
   options: MatchOptions = {}
 ): MatchedControlResultSet {
-  const unavailableIndices = new Set(events.flatMap(e => [e.originIndex, e.availableAtIndex ?? e.originIndex]));
+  const unavailableIndices = new Set(events.flatMap(e => [e.originIndex, e.availableAtIndex]));
   const controls: MatchedControlObservation[] = [];
 
   for (const ev of events) {
@@ -89,16 +89,18 @@ export function generateMatchedControls(
     // Enforce 1:1 matching without replacement to prevent pseudo-replication
     unavailableIndices.add(matchedIdx);
     const causalAtr = calculateCausalAtr(candles, matchedIdx);
+    const ts = candles[matchedIdx]?.timestamp ?? 0;
 
     const controlPseudoEvent: BaseEvent = {
       id: `ctrl-${ev.id}`,
       type: 'control',
       symbol: ev.symbol,
       timeframe: ev.timeframe,
-      detectedAt: candles[matchedIdx]?.timestamp ?? 0,
+      detectedAt: ts,
       originIndex: matchedIdx,
+      originTimestamp: ts,
       availableAtIndex: matchedIdx,
-      availableAtTimestamp: candles[matchedIdx]?.timestamp ?? 0,
+      availableAtTimestamp: ts,
       direction: ev.direction // Exact direction symmetry!
     };
 

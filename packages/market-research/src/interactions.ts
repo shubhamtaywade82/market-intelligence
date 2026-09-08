@@ -54,9 +54,7 @@ export function areEventsCoOccurring(
   maxBarGap: number = 3
 ): boolean {
   if (eventA.symbol !== eventB.symbol || eventA.timeframe !== eventB.timeframe) return false;
-  const idxA = eventA.availableAtIndex ?? eventA.originIndex;
-  const idxB = eventB.availableAtIndex ?? eventB.originIndex;
-  return Math.abs(idxA - idxB) <= maxBarGap;
+  return Math.abs(eventA.availableAtIndex - eventB.availableAtIndex) <= maxBarGap;
 }
 
 export function calculateBinaryEntropy(p: number): number {
@@ -94,9 +92,9 @@ function matchesSecondaryCondition(
   opts: AnchorInteractionOptions
 ): boolean {
   if (anchor.symbol !== sec.symbol || anchor.timeframe !== sec.timeframe) return false;
-  if ((opts.requireDirectionMatch ?? true) && anchor.direction !== sec.direction) return false;
-  const anchorIdx = anchor.availableAtIndex ?? anchor.originIndex;
-  const secIdx = sec.availableAtIndex ?? sec.originIndex;
+  if (opts.requireDirectionMatch && anchor.direction !== sec.direction) return false;
+  const anchorIdx = anchor.availableAtIndex;
+  const secIdx = sec.availableAtIndex;
   if (opts.requirePriorOrCoincident && secIdx > anchorIdx) return false;
   return Math.abs(secIdx - anchorIdx) <= (opts.maxBarGap ?? 3);
 }
