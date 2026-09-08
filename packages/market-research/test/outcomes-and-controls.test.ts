@@ -276,4 +276,68 @@ describe('Cluster-Aware Statistical Inference', () => {
     expect(boot.confidenceInterval.lower).toBeGreaterThan(0.2);
     expect(boot.confidenceInterval.upper).toBeGreaterThan(boot.confidenceInterval.lower);
   });
+
+  it('separates market excursion behavior from trade execution and resolves path collisions', () => {
+    const ev: BaseEvent = {
+      id: 'collision-ev',
+      type: 'test',
+      symbol: 'BTCUSDT',
+      timeframe: '15m',
+      detectedAt: 1000,
+      originIndex: 0,
+      direction: 'bullish'
+    };
+    // Candle 0: close 100
+    // Candle 1: high 115 (>= target 110 at +2R), low 90 (<= stop 95 at -1R) -> collision!
+    const candles: Candle[] = [
+      makeCandle(1000, 100, 102, 98, 100),
+      makeCandle(2000, 100, 115, 90, 105)
+    ];
+
+    const pessOutcome = evaluateGenericOutcome(ev, candles, new Decimal(5), {
+      horizonCandles: 5,
+      targetR: 2.0,
+      stopAtrMultiplier: 1.0,
+      ambiguityPolicy: 'pessimistic'
+    });
+    expect(pessOutcome.collision).toBe(true);
+    expect(pessOutcome.isAmbiguous).toBe(true);
+    expect(pessOutcome.pathResolution).toBe('ohlc_pessimistic');
+    expect(pessOutcome.stopFirst).toBe(true);
+    expect(pessOutcome.targetFirst).toBe(false);
+    expect(pessOutcome.targetHitR.toNumber()).toBe(-1); // -1R (stop multiplier)
+
+    const optOutcome = evaluateGenericOutcome(ev, candles, new Decimal(5), {
+      horizonCandles: 5,
+      targetR: 2.0,
+      stopAtrMultiplier: 1.0,
+      ambiguityPolicy: 'optimistic'
+    });
+    expect(optOutcome.collision).toBe(true);
+    expect(optOutcome.pathResolution).toBe('ohlc_optimistic');
+    expect(optOutcome.targetFirst).toBe(true);
+    expect(optOutcome.stopFirst).toBe(false);
+    expect(optOutcome.targetHitR.toNumber()).toBe(2);
+
+    const ambigOutcome = evaluateGenericOutcome(ev, candles, new Decimal(5), {
+      horizonCandles: 5,
+      targetR: 2.0,
+      stopAtrMultiplier: 1.0,
+      ambiguityPolicy: 'ambiguous'
+    });
+    expect(ambigOutcome.pathResolution).toBe('ambiguous');
+    expect(ambigOutcome.firstHit).toBe('simultaneous_collision');
+
+    // Check excursion behavior metrics
+    expect(pessOutcome.mfe.toNumber()).toBe(15);
+    expect(pessOutcome.mae.toNumber()).toBe(10);
+    expect(pessOutcome.mfeR.toNumber()).toBe(3); // 15 / 5 = 3R
+    expect(pessOutcome.maeR.toNumber()).toBe(2); // 10 / 5 = 2R
+    expect(pessOutcome.targetHit1R).toBe(true);
+    expect(pessOutcome.targetHit2R).toBe(true);
+    expect(pessOutcome.targetHit3R).toBe(true);
+    expect(pessOutcome.stopHit).toBe(true);
+    expect(pessOutcome.timeToTarget).toBe(1);
+    expect(pessOutcome.timeToStop).toBe(1);
+  });
 });

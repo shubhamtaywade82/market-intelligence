@@ -81,8 +81,8 @@ describe('Study Runner & Context Features', () => {
     expect(firstObs.context.trendRegime).toBeDefined();
     expect(firstObs.outcome.targetHitR).toBeDefined();
     expect(firstObs.provenance.datasetId).toBe('BTCUSDT-15m');
-    expect(firstObs.provenance.datasetHash).toHaveLength(8);
-    expect(firstObs.provenance.detectorConfigHash).toHaveLength(8);
+    expect(firstObs.provenance.datasetHash).toHaveLength(16);
+    expect(firstObs.provenance.detectorConfigHash).toHaveLength(16);
     expect(firstObs.provenance.detectorVersion).toBe('1.0.0');
     expect(firstObs.provenance.outcomeVersion).toBe('1.0.0');
   });

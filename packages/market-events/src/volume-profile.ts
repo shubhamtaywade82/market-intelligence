@@ -22,6 +22,32 @@ export interface VolumeProfileOptions {
 /**
  * Calculates Volume Profile (POC, VAH, VAL) deterministically over a series of candles.
  */
+function computeValueAreaBounds(
+  levels: readonly VolumeProfileLevel[],
+  pocIdx: number,
+  targetVolume: Decimal
+): { val: Decimal; vah: Decimal } {
+  let lowIdx = pocIdx;
+  let highIdx = pocIdx;
+  let accumulated = levels[pocIdx]!.volume;
+
+  // Outward expansion from POC comparing adjacent higher/lower volume bins
+  while (accumulated.lt(targetVolume) && (lowIdx > 0 || highIdx < levels.length - 1)) {
+    const nextLowVol = lowIdx > 0 ? levels[lowIdx - 1]!.volume : new Decimal(-1);
+    const nextHighVol = highIdx < levels.length - 1 ? levels[highIdx + 1]!.volume : new Decimal(-1);
+
+    if (nextHighVol.gte(nextLowVol) && highIdx < levels.length - 1) {
+      highIdx++;
+      accumulated = accumulated.plus(levels[highIdx]!.volume);
+    } else if (lowIdx > 0) {
+      lowIdx--;
+      accumulated = accumulated.plus(levels[lowIdx]!.volume);
+    }
+  }
+
+  return { val: levels[lowIdx]!.price, vah: levels[highIdx]!.price };
+}
+
 export function calculateVolumeProfile(
   candles: readonly Candle[],
   options: VolumeProfileOptions
@@ -55,22 +81,14 @@ export function calculateVolumeProfile(
   }
 
   const levels = Array.from(volumeMap.values()).sort((a, b) => a.price.cmp(b.price));
-  const pocLevel = [...levels].sort((a, b) => b.volume.cmp(a.volume))[0];
-  const poc = pocLevel ? pocLevel.price : new Decimal(0);
+  let pocIdx = 0;
+  for (let i = 1; i < levels.length; i++) {
+    if (levels[i]!.volume.gt(levels[pocIdx]!.volume)) pocIdx = i;
+  }
+  const poc = levels[pocIdx]?.price ?? new Decimal(0);
 
   const targetVaVolume = totalVolume.times(vaRatio);
-  let accumulated = new Decimal(0);
-  let val = levels[0]?.price ?? new Decimal(0);
-  let vah = levels[levels.length - 1]?.price ?? new Decimal(0);
-
-  // Accumulate volume starting from lowest price upward until reaching VA threshold
-  for (const lvl of levels) {
-    accumulated = accumulated.plus(lvl.volume);
-    if (accumulated.gte(targetVaVolume)) {
-      vah = lvl.price;
-      break;
-    }
-  }
+  const { val, vah } = computeValueAreaBounds(levels, pocIdx, targetVaVolume);
 
   return {
     poc,

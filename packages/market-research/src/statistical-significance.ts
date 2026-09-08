@@ -65,6 +65,7 @@ export function calculateClusterEffectiveSampleSize(
 export interface ClusterObservation {
   readonly hits: number;
   readonly trials: number;
+  readonly clusterId?: string | undefined;
 }
 
 export interface ClusterBootstrapResult {
@@ -204,14 +205,8 @@ export function compareAgainstBaseline(
   let clusterBootstrap: ClusterBootstrapResult | undefined;
   let pValueEstimate: number;
 
-  if (inp.eventClusters && inp.baselineClusters) {
+  if (inp.eventClusters && inp.baselineClusters && inp.eventClusters.length > 0 && inp.baselineClusters.length > 0) {
     clusterBootstrap = calculateClusterBootstrapComparison(inp.eventClusters, inp.baselineClusters);
-    pValueEstimate = clusterBootstrap.pValue;
-  } else if (inp.clusterSizes && inp.clusterSizes.length > 0) {
-    const rate = evTrials > 0 ? eventHits / evTrials : 0;
-    const evClust = inp.clusterSizes.map(sz => ({ trials: sz, hits: Math.min(sz, Math.round(sz * rate)) }));
-    const baseClust = [{ hits: baseHits, trials: baseTrials }];
-    clusterBootstrap = calculateClusterBootstrapComparison(evClust, baseClust);
     pValueEstimate = clusterBootstrap.pValue;
   } else {
     const pPool = (eventHits + baseHits) / (evTrials + baseTrials);

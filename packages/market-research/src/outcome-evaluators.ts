@@ -1,21 +1,6 @@
 import { Decimal } from 'decimal.js';
-import type {
-  BaseEvent,
-  Candle,
-  FvgEvent,
-  OrderBlockEvent,
-  StructureBreakEvent,
-  LiquiditySweepEvent
-} from '@nemesis-oss/market-events';
-import type {
-  OutcomeConfig,
-  BaseOutcome,
-  OrderBlockOutcome,
-  StructureOutcome,
-  LiquiditySweepOutcome,
-  EventOutcome,
-  ZoneOutcome
-} from './types.js';
+import type { BaseEvent, Candle, FvgEvent, OrderBlockEvent, StructureBreakEvent, LiquiditySweepEvent } from '@nemesis-oss/market-events';
+import type { OutcomeConfig, BaseOutcome, OrderBlockOutcome, StructureOutcome, LiquiditySweepOutcome, EventOutcome, ZoneOutcome, PathResolution } from './types.js';
 import { evaluateGenericOutcome, DEFAULT_OUTCOME_CONFIG, resolveCollision } from './generic-outcomes.js';
 
 export { evaluateGenericOutcome, DEFAULT_OUTCOME_CONFIG };
@@ -29,6 +14,13 @@ interface ZoneTrajectoryResult {
   readonly firstHit: BaseOutcome['firstHit'];
   readonly timeToFirstHitBars: number;
   readonly isAmbiguous: boolean;
+  readonly pathResolution: PathResolution;
+  readonly collision: boolean;
+  readonly targetFirst: boolean;
+  readonly stopFirst: boolean;
+  readonly stopHit: boolean;
+  readonly timeToTarget: number | null;
+  readonly timeToStop: number | null;
 }
 
 function checkZoneTouch(
@@ -63,16 +55,17 @@ function evaluateZoneTrajectory(
   const stop = isBull ? (span.gt(0) ? event.bottom : entry.minus(risk)) : (span.gt(0) ? event.top : entry.plus(risk));
 
   const state = { firstTouchBars: null as number | null, maxPen: new Decimal(0), isInvalidated: false };
-  let mfe = new Decimal(0);
-  let mae = new Decimal(0);
+  let mfe = new Decimal(0), mae = new Decimal(0), timeToHit = 0;
   let firstHit: BaseOutcome['firstHit'] = 'horizon_expired';
-  let timeToHit = 0;
-  let isAmbiguous = false;
+  let isAmbiguous = false, collision = false, stopHit = false;
+  let pathResolution: PathResolution = 'exact';
+  let timeToTarget: number | null = null, timeToStop: number | null = null;
 
   const horizon = Math.min(candles.length, event.originIndex + 1 + config.horizonCandles);
   for (let i = event.originIndex + 1; i < horizon; i++) {
     const c = candles[i]!;
-    checkZoneTouch(c, event, state, i - event.originIndex);
+    const offset = i - event.originIndex;
+    checkZoneTouch(c, event, state, offset);
     const fav = isBull ? c.high.minus(entry) : entry.minus(c.low);
     if (fav.gt(mfe)) mfe = fav;
     const adv = isBull ? entry.minus(c.low) : c.high.minus(entry);
@@ -80,25 +73,27 @@ function evaluateZoneTrajectory(
 
     const hitTarget = isBull ? c.high.gte(target) : c.low.lte(target);
     const hitStop = isBull ? c.low.lte(stop) : c.high.gte(stop);
+    if (hitStop && !stopHit) { stopHit = true; timeToStop = offset; }
+    if (hitTarget && timeToTarget === null) timeToTarget = offset;
+
     if (hitTarget && hitStop) {
-      firstHit = resolveCollision(config.ambiguityPolicy);
-      timeToHit = i - event.originIndex;
+      collision = true;
       isAmbiguous = true;
+      timeToHit = offset;
+      firstHit = resolveCollision(config.ambiguityPolicy);
+      pathResolution = config.ambiguityPolicy === 'optimistic' ? 'ohlc_optimistic'
+        : config.ambiguityPolicy === 'pessimistic' ? 'ohlc_pessimistic' : 'ambiguous';
       break;
     }
-    if (hitTarget) {
-      firstHit = 'target_first';
-      timeToHit = i - event.originIndex;
-      break;
-    }
-    if (hitStop) {
-      firstHit = 'stop_first';
-      timeToHit = i - event.originIndex;
-      break;
-    }
+    if (hitTarget) { firstHit = 'target_first'; timeToHit = offset; pathResolution = 'exact'; break; }
+    if (hitStop) { firstHit = 'stop_first'; timeToHit = offset; pathResolution = 'exact'; break; }
   }
 
-  return { mfe, mae, maxPenetration: state.maxPen, firstTouchBars: state.firstTouchBars, isInvalidated: state.isInvalidated, firstHit, timeToFirstHitBars: timeToHit, isAmbiguous };
+  return {
+    mfe, mae, maxPenetration: state.maxPen, firstTouchBars: state.firstTouchBars, isInvalidated: state.isInvalidated,
+    firstHit, timeToFirstHitBars: timeToHit, isAmbiguous, pathResolution, collision,
+    targetFirst: firstHit === 'target_first', stopFirst: firstHit === 'stop_first', stopHit, timeToTarget, timeToStop
+  };
 }
 
 function computeOutcomeStats(
@@ -109,6 +104,8 @@ function computeOutcomeStats(
 ) {
   const mfeAtr = causalAtr.gt(0) ? traj.mfe.dividedBy(causalAtr) : new Decimal(0);
   const maeAtr = causalAtr.gt(0) ? traj.mae.dividedBy(causalAtr) : new Decimal(0);
+  const mfeR = risk.gt(0) ? traj.mfe.dividedBy(risk) : new Decimal(0);
+  const maeR = risk.gt(0) ? traj.mae.dividedBy(risk) : new Decimal(0);
   const targetHitR = traj.firstHit === 'target_first'
     ? new Decimal(config.targetR)
     : traj.firstHit === 'stop_first'
@@ -118,11 +115,23 @@ function computeOutcomeStats(
   return {
     mfeAtr,
     maeAtr,
+    mfeR,
+    maeR,
     targetHitR,
     realizedR: targetHitR,
     firstHit: traj.firstHit,
     timeToFirstHitBars: traj.timeToFirstHitBars,
     isAmbiguous: traj.isAmbiguous,
+    pathResolution: traj.pathResolution,
+    collision: traj.collision,
+    targetFirst: traj.targetFirst,
+    stopFirst: traj.stopFirst,
+    stopHit: traj.stopHit,
+    timeToTarget: traj.timeToTarget,
+    timeToStop: traj.timeToStop,
+    targetHit1R: traj.mfe.gte(risk),
+    targetHit2R: traj.mfe.gte(risk.times(2)),
+    targetHit3R: traj.mfe.gte(risk.times(3)),
     hit1R: traj.firstHit === 'target_first' || traj.mfe.gte(risk),
     hit2R: traj.firstHit === 'target_first' || (traj.firstHit !== 'stop_first' && traj.mfe.gte(risk.times(2))),
     hit3R: traj.firstHit !== 'stop_first' && traj.mfe.gte(risk.times(3))

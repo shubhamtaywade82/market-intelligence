@@ -1,13 +1,7 @@
 import { Decimal } from 'decimal.js';
 import type { Candle, Timeframe, BaseEvent } from '@nemesis-oss/market-events';
-import {
-  detectFvg,
-  detectSwings,
-  detectStructureBreaks,
-  detectOrderBlocks,
-  detectLiquiditySweeps
-} from '@nemesis-oss/market-events';
-import { calculateCausalAtr } from './study-runner.js';
+import { detectFvg, detectSwings, detectStructureBreaks, detectOrderBlocks, detectLiquiditySweeps } from '@nemesis-oss/market-events';
+import { calculateCausalAtr } from './causal-atr.js';
 import { evaluateEventOutcome, DEFAULT_OUTCOME_CONFIG } from './outcome-evaluators.js';
 import type { ComponentStudyResult, OutcomeConfig, EventOutcome } from './types.js';
 
@@ -25,6 +19,8 @@ export interface WalkForwardWindow {
   readonly trainEndTime: number;
   readonly testStartTime: number;
   readonly testEndTime: number;
+  readonly embargoBars?: number | undefined;
+  readonly purgedTrainEventsCount?: number | undefined;
   readonly frozenHypotheses?: readonly FrozenHypothesis[] | undefined;
   readonly trainResults: readonly ComponentStudyResult[];
   readonly testResults: readonly ComponentStudyResult[];
@@ -37,6 +33,7 @@ export interface WalkForwardOptions {
   readonly testCandlesCount: number;
   readonly stepCandlesCount: number;
   readonly horizonCandles?: number | undefined;
+  readonly embargoBars?: number | undefined;
 }
 
 export interface StabilitySummary {
@@ -81,18 +78,12 @@ function detectEventsByType(
 ): readonly BaseEvent[] {
   const { symbol, timeframe } = options;
   if (type === 'fvg') return detectFvg(candles, { symbol, timeframe });
-  if (type === 'bos') {
-    const swings = detectSwings(candles, { leftBars: 2, rightBars: 2 });
-    return detectStructureBreaks(candles, swings, { symbol, timeframe });
-  }
+  const swings = detectSwings(candles, { leftBars: 2, rightBars: 2 });
+  if (type === 'bos') return detectStructureBreaks(candles, swings, { symbol, timeframe });
+  if (type === 'liquidity_sweep') return detectLiquiditySweeps(candles, swings, { symbol, timeframe });
   if (type === 'order_block') {
-    const swings = detectSwings(candles, { leftBars: 2, rightBars: 2 });
     const breaks = detectStructureBreaks(candles, swings, { symbol, timeframe });
     return detectOrderBlocks(candles, breaks, { symbol, timeframe });
-  }
-  if (type === 'liquidity_sweep') {
-    const swings = detectSwings(candles, { leftBars: 2, rightBars: 2 });
-    return detectLiquiditySweeps(candles, swings, { symbol, timeframe });
   }
   return [];
 }
@@ -148,10 +139,15 @@ function evaluateComponentWithHypothesis(
   type: string,
   trainCandles: readonly Candle[],
   testCandles: readonly Candle[],
-  options: { symbol: string; timeframe: Timeframe; config: OutcomeConfig }
-): { frozen: FrozenHypothesis; trainResult: ComponentStudyResult; testResult: ComponentStudyResult } {
-  const { symbol, timeframe, config } = options;
-  const trainEvents = detectEventsByType(type, trainCandles, { symbol, timeframe });
+  options: { symbol: string; timeframe: Timeframe; config: OutcomeConfig; purgeHorizon?: number }
+): { frozen: FrozenHypothesis; trainResult: ComponentStudyResult; testResult: ComponentStudyResult; purgedCount: number } {
+  const { symbol, timeframe, config, purgeHorizon = 0 } = options;
+  const rawTrainEvents = detectEventsByType(type, trainCandles, { symbol, timeframe });
+  // Purge training events whose outcome horizon bleeds past training period
+  const maxSafeIndex = Math.max(0, trainCandles.length - 1 - purgeHorizon);
+  const trainEvents = purgeHorizon > 0 ? rawTrainEvents.filter(e => e.originIndex <= maxSafeIndex) : rawTrainEvents;
+  const purgedCount = rawTrainEvents.length - trainEvents.length;
+
   const { bestRule, trainHitRate, trainSample } = discoverBestHypothesis(trainEvents, trainCandles, config);
 
   const frozen: FrozenHypothesis = {
@@ -174,7 +170,7 @@ function evaluateComponentWithHypothesis(
   const testHitRate = filteredTest.length > 0 ? testHits / filteredTest.length : 0;
   const testRes = buildSimpleStudyResult(symbol, timeframe, type, filteredTest.length, testHitRate);
 
-  return { frozen, trainResult: trainRes, testResult: testRes };
+  return { frozen, trainResult: trainRes, testResult: testRes, purgedCount };
 }
 
 function computeStabilitySummary(
@@ -213,7 +209,8 @@ function computeStabilitySummary(
 
 /**
  * Runs walk-forward out-of-sample validation:
- * Discovers best hypothesis on training window, freezes it, and evaluates out-of-sample on unseen test window.
+ * Discovers best hypothesis on purged training window, freezes it,
+ * and evaluates out-of-sample on unseen test window separated by an embargo buffer.
  */
 export function runWalkForwardValidation(
   candles: readonly Candle[],
@@ -224,25 +221,34 @@ export function runWalkForwardValidation(
     ...DEFAULT_OUTCOME_CONFIG,
     ...(horizonCandles !== undefined ? { horizonCandles } : {})
   };
+  const embargoBars = options.embargoBars ?? config.horizonCandles;
   const windows: WalkForwardWindow[] = [];
   const components = ['fvg', 'bos', 'order_block', 'liquidity_sweep'];
 
   let startIdx = 0;
   let windowIdx = 0;
 
-  while (startIdx + trainCandlesCount + testCandlesCount <= candles.length) {
+  while (startIdx + trainCandlesCount + embargoBars + testCandlesCount <= candles.length) {
     const trainSlice = candles.slice(startIdx, startIdx + trainCandlesCount);
-    const testSlice = candles.slice(startIdx + trainCandlesCount, startIdx + trainCandlesCount + testCandlesCount);
+    const testStart = startIdx + trainCandlesCount + embargoBars;
+    const testSlice = candles.slice(testStart, testStart + testCandlesCount);
 
     const frozenList: FrozenHypothesis[] = [];
     const trainResults: ComponentStudyResult[] = [];
     const testResults: ComponentStudyResult[] = [];
+    let windowPurgedCount = 0;
 
     for (const comp of components) {
-      const res = evaluateComponentWithHypothesis(comp, trainSlice, testSlice, { symbol, timeframe, config });
+      const res = evaluateComponentWithHypothesis(comp, trainSlice, testSlice, {
+        symbol,
+        timeframe,
+        config,
+        purgeHorizon: config.horizonCandles
+      });
       frozenList.push(res.frozen);
       trainResults.push(res.trainResult);
       testResults.push(res.testResult);
+      windowPurgedCount += res.purgedCount;
     }
 
     windows.push({
@@ -251,6 +257,8 @@ export function runWalkForwardValidation(
       trainEndTime: trainSlice[trainSlice.length - 1]!.timestamp,
       testStartTime: testSlice[0]!.timestamp,
       testEndTime: testSlice[testSlice.length - 1]!.timestamp,
+      embargoBars,
+      purgedTrainEventsCount: windowPurgedCount,
       frozenHypotheses: frozenList,
       trainResults,
       testResults
@@ -268,20 +276,16 @@ export function runWalkForwardValidation(
  * Formats WalkForward stability summary as a clean markdown table.
  */
 export function formatStabilityMarkdown(stability: readonly StabilitySummary[]): string {
-  const header = '| Component | Windows | Train Hit Rate (+2R) | Test Hit Rate (+2R) | Degradation | Status |';
-  const sep = '| :--- | :---: | :---: | :---: | :---: | :---: |';
   const rows = stability.map(s => {
     const train = (s.meanTrainHitRateR2 * 100).toFixed(1);
     const test = (s.meanTestHitRateR2 * 100).toFixed(1);
     const deg = (s.hitRateDegradation * 100).toFixed(1);
-    const status = s.isStable ? 'STABLE' : 'DEGRADED';
-    return `| ${s.component.toUpperCase()} | ${s.windowsCount} | ${train}% | ${test}% | ${deg}pp | ${status} |`;
+    return `| ${s.component.toUpperCase()} | ${s.windowsCount} | ${train}% | ${test}% | ${deg}pp | ${s.isStable ? 'STABLE' : 'DEGRADED'} |`;
   });
-
   return [
     '## Walk-Forward Stability (Out-of-Sample)',
-    header,
-    sep,
+    '| Component | Windows | Train Hit Rate (+2R) | Test Hit Rate (+2R) | Degradation | Status |',
+    '| :--- | :---: | :---: | :---: | :---: | :---: |',
     ...rows
   ].join('\n');
 }

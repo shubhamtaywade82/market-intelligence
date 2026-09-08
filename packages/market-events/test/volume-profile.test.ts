@@ -31,6 +31,7 @@ describe('Volume Profile Engine', () => {
     expect(profile.totalVolume.toNumber()).toBe(360);
     expect(profile.poc.toNumber()).toBe(100);
     expect(profile.levels.length).toBeGreaterThan(1);
-    expect(profile.val.toNumber()).toBeLessThanOrEqual(profile.vah.toNumber());
+    expect(profile.val.toNumber()).toBeLessThanOrEqual(profile.poc.toNumber());
+    expect(profile.poc.toNumber()).toBeLessThanOrEqual(profile.vah.toNumber());
   });
 });

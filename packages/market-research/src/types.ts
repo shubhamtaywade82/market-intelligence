@@ -25,6 +25,13 @@ export interface OutcomeConfig {
   readonly ambiguityPolicy: AmbiguityPolicy;
 }
 
+export type PathResolution =
+  | 'exact'
+  | 'lower_tf'
+  | 'ohlc_pessimistic'
+  | 'ohlc_optimistic'
+  | 'ambiguous';
+
 export interface BaseOutcome {
   readonly eventId: string;
   readonly horizonCandles: number;
@@ -32,12 +39,24 @@ export interface BaseOutcome {
   readonly mae: Decimal;
   readonly mfeAtr: Decimal;
   readonly maeAtr: Decimal;
+  readonly mfeR: Decimal;
+  readonly maeR: Decimal;
   readonly targetHitR: Decimal;
-  /** @deprecated Use targetHitR instead */
+  /** @deprecated Use targetHitR or explicit trade execution simulator instead */
   readonly realizedR: Decimal;
   readonly firstHit: FirstHitResult;
   readonly timeToFirstHitBars: number;
   readonly isAmbiguous: boolean;
+  readonly pathResolution: PathResolution;
+  readonly collision: boolean;
+  readonly targetFirst: boolean;
+  readonly stopFirst: boolean;
+  readonly stopHit: boolean;
+  readonly timeToTarget: number | null;
+  readonly timeToStop: number | null;
+  readonly targetHit1R: boolean;
+  readonly targetHit2R: boolean;
+  readonly targetHit3R: boolean;
   readonly hit1R: boolean;
   readonly hit2R: boolean;
   readonly hit3R: boolean;

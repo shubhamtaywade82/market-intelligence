@@ -1,6 +1,6 @@
 import { Decimal } from 'decimal.js';
 import type { BaseEvent, Candle } from '@nemesis-oss/market-events';
-import type { OutcomeConfig, BaseOutcome, DirectionalOutcome } from './types.js';
+import type { OutcomeConfig, BaseOutcome, DirectionalOutcome, PathResolution } from './types.js';
 
 export const DEFAULT_OUTCOME_CONFIG: OutcomeConfig = {
   horizonCandles: 24,
@@ -15,6 +15,13 @@ interface TrajectoryResult {
   readonly firstHit: BaseOutcome['firstHit'];
   readonly timeToFirstHitBars: number;
   readonly isAmbiguous: boolean;
+  readonly pathResolution: PathResolution;
+  readonly collision: boolean;
+  readonly targetFirst: boolean;
+  readonly stopFirst: boolean;
+  readonly stopHit: boolean;
+  readonly timeToTarget: number | null;
+  readonly timeToStop: number | null;
 }
 
 export function resolveCollision(policy: OutcomeConfig['ambiguityPolicy']): BaseOutcome['firstHit'] {
@@ -47,40 +54,42 @@ export function evaluateTrajectory(
   const target = isBull ? entry.plus(atr.times(config.targetR)) : entry.minus(atr.times(config.targetR));
   const stop = isBull ? entry.minus(atr.times(config.stopAtrMultiplier)) : entry.plus(atr.times(config.stopAtrMultiplier));
 
-  let mfe = new Decimal(0);
-  let mae = new Decimal(0);
+  let mfe = new Decimal(0), mae = new Decimal(0), timeToHit = 0;
   let firstHit: BaseOutcome['firstHit'] = 'horizon_expired';
-  let timeToHit = 0;
-  let isAmbiguous = false;
+  let isAmbiguous = false, collision = false, stopHit = false;
+  let pathResolution: PathResolution = 'exact';
+  let timeToTarget: number | null = null, timeToStop: number | null = null;
 
   const horizon = Math.min(candles.length, startOffset + config.horizonCandles);
   for (let i = startOffset; i < horizon; i++) {
     const c = candles[i]!;
+    const offset = i - startOffset + 1;
     const fav = isBull ? c.high.minus(entry) : entry.minus(c.low);
-    const adv = isBull ? entry.minus(c.low) : c.high.minus(entry);
     if (fav.gt(mfe)) mfe = fav;
+    const adv = isBull ? entry.minus(c.low) : c.high.minus(entry);
     if (adv.gt(mae)) mae = adv;
 
     const { hitTarget, hitStop } = checkBarHit(c, isBull, target, stop);
+    if (hitStop && !stopHit) { stopHit = true; timeToStop = offset; }
+    if (hitTarget && timeToTarget === null) timeToTarget = offset;
+
     if (hitTarget && hitStop) {
-      firstHit = resolveCollision(config.ambiguityPolicy);
-      timeToHit = i - startOffset + 1;
+      collision = true;
       isAmbiguous = true;
+      timeToHit = offset;
+      firstHit = resolveCollision(config.ambiguityPolicy);
+      pathResolution = config.ambiguityPolicy === 'optimistic' ? 'ohlc_optimistic'
+        : config.ambiguityPolicy === 'pessimistic' ? 'ohlc_pessimistic' : 'ambiguous';
       break;
     }
-    if (hitTarget) {
-      firstHit = 'target_first';
-      timeToHit = i - startOffset + 1;
-      break;
-    }
-    if (hitStop) {
-      firstHit = 'stop_first';
-      timeToHit = i - startOffset + 1;
-      break;
-    }
+    if (hitTarget) { firstHit = 'target_first'; timeToHit = offset; pathResolution = 'exact'; break; }
+    if (hitStop) { firstHit = 'stop_first'; timeToHit = offset; pathResolution = 'exact'; break; }
   }
 
-  return { mfe, mae, firstHit, timeToFirstHitBars: timeToHit, isAmbiguous };
+  return {
+    mfe, mae, firstHit, timeToFirstHitBars: timeToHit, isAmbiguous, pathResolution, collision,
+    targetFirst: firstHit === 'target_first', stopFirst: firstHit === 'stop_first', stopHit, timeToTarget, timeToStop
+  };
 }
 
 export function evaluateGenericOutcome(
@@ -114,11 +123,23 @@ export function evaluateGenericOutcome(
     mae: traj.mae,
     mfeAtr,
     maeAtr,
+    mfeR: mfeAtr,
+    maeR: maeAtr,
     targetHitR,
     realizedR: targetHitR,
     firstHit: traj.firstHit,
     timeToFirstHitBars: traj.timeToFirstHitBars,
     isAmbiguous: traj.isAmbiguous,
+    pathResolution: traj.pathResolution,
+    collision: traj.collision,
+    targetFirst: traj.targetFirst,
+    stopFirst: traj.stopFirst,
+    stopHit: traj.stopHit,
+    timeToTarget: traj.timeToTarget,
+    timeToStop: traj.timeToStop,
+    targetHit1R: mfeAtr.gte(1),
+    targetHit2R: mfeAtr.gte(2),
+    targetHit3R: mfeAtr.gte(3),
     hit1R: traj.firstHit === 'target_first' || mfeAtr.gte(1),
     hit2R: traj.firstHit === 'target_first' || (traj.firstHit !== 'stop_first' && mfeAtr.gte(2)),
     hit3R: traj.firstHit !== 'stop_first' && mfeAtr.gte(3)
