@@ -2,6 +2,7 @@ import { Decimal } from 'decimal.js';
 import type { Candle, Timeframe } from '@nemesis-oss/market-events';
 import { runUniversalStudy } from './study-runner.js';
 import { buildEffectivenessMatrix, formatMatrixMarkdown } from './matrix-report.js';
+import { runWalkForwardValidation, formatStabilityMarkdown } from './walk-forward.js';
 
 function generateRealisticCandles(count: number, basePrice: number = 60000): Candle[] {
   const candles: Candle[] = [];
@@ -48,9 +49,10 @@ function generateRealisticCandles(count: number, basePrice: number = 60000): Can
  */
 export function runResearchCli(symbol: string = 'BTCUSDT'): string {
   const timeframes: Timeframe[] = ['5m', '15m', '1h', '4h'];
+  const sampleCandles = generateRealisticCandles(320, 65000);
+
   const allStudies = timeframes.flatMap(tf => {
-    const candles = generateRealisticCandles(320, 65000);
-    return runUniversalStudy(candles, {
+    return runUniversalStudy(sampleCandles, {
       symbol,
       timeframe: tf,
       horizonCandles: 24
@@ -58,7 +60,19 @@ export function runResearchCli(symbol: string = 'BTCUSDT'): string {
   });
 
   const matrix = buildEffectivenessMatrix(symbol, allStudies);
-  return formatMatrixMarkdown(matrix, timeframes);
+  const matrixMd = formatMatrixMarkdown(matrix, timeframes);
+
+  const wfResult = runWalkForwardValidation(sampleCandles, {
+    symbol,
+    timeframe: '15m',
+    trainCandlesCount: 160,
+    testCandlesCount: 80,
+    stepCandlesCount: 40,
+    horizonCandles: 24
+  });
+  const stabilityMd = formatStabilityMarkdown(wfResult.stability);
+
+  return `${matrixMd}\n\n${stabilityMd}`;
 }
 
 const isMainModule = process.argv[1] && process.argv[1].endsWith('cli.js');

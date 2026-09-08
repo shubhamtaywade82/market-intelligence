@@ -43,12 +43,16 @@ export function runWalkForwardValidation(
   let startIdx = 0;
   let windowIdx = 0;
 
+  const studyOpts = horizonCandles !== undefined
+    ? { symbol, timeframe, horizonCandles }
+    : { symbol, timeframe };
+
   while (startIdx + trainCandlesCount + testCandlesCount <= candles.length) {
     const trainSlice = candles.slice(startIdx, startIdx + trainCandlesCount);
     const testSlice = candles.slice(startIdx + trainCandlesCount, startIdx + trainCandlesCount + testCandlesCount);
 
-    const trainResults = runUniversalStudy(trainSlice, { symbol, timeframe, horizonCandles });
-    const testResults = runUniversalStudy(testSlice, { symbol, timeframe, horizonCandles });
+    const trainResults = runUniversalStudy(trainSlice, studyOpts);
+    const testResults = runUniversalStudy(testSlice, studyOpts);
 
     windows.push({
       windowIndex: windowIdx,
@@ -98,3 +102,26 @@ export function runWalkForwardValidation(
 
   return { windows, stability };
 }
+
+/**
+ * Formats WalkForward stability summary as a clean markdown table.
+ */
+export function formatStabilityMarkdown(stability: readonly StabilitySummary[]): string {
+  const header = '| Component | Windows | Train Hit Rate (+2R) | Test Hit Rate (+2R) | Degradation | Status |';
+  const sep = '| :--- | :---: | :---: | :---: | :---: | :---: |';
+  const rows = stability.map(s => {
+    const train = (s.meanTrainHitRateR2 * 100).toFixed(1);
+    const test = (s.meanTestHitRateR2 * 100).toFixed(1);
+    const deg = (s.hitRateDegradation * 100).toFixed(1);
+    const status = s.isStable ? 'STABLE' : 'DEGRADED';
+    return `| ${s.component.toUpperCase()} | ${s.windowsCount} | ${train}% | ${test}% | ${deg}pp | ${status} |`;
+  });
+
+  return [
+    '## Walk-Forward Stability (Out-of-Sample)',
+    header,
+    sep,
+    ...rows
+  ].join('\n');
+}
+
