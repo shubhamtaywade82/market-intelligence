@@ -6,7 +6,11 @@ export interface TimeframeCell {
   readonly hitRateR2: number;
   readonly medianMfeAtr: number;
   readonly medianMaeAtr: number;
-  readonly fullFillRate: number;
+  readonly fullFillRate: number | null;
+  readonly ciLower?: number | undefined;
+  readonly ciUpper?: number | undefined;
+  readonly uplift?: number | undefined;
+  readonly isSignificant?: boolean | undefined;
 }
 
 export interface EffectivenessRow {
@@ -21,7 +25,7 @@ export interface EffectivenessMatrixReport {
 }
 
 /**
- * Aggregates multi-timeframe study results into an effectiveness matrix report.
+ * Aggregates multi-timeframe study results into an effectiveness matrix report with statistical confidence.
  */
 export function buildEffectivenessMatrix(
   symbol: string,
@@ -40,7 +44,11 @@ export function buildEffectivenessMatrix(
       hitRateR2: study.hitRates.r2,
       medianMfeAtr: study.medianMfeAtr,
       medianMaeAtr: study.medianMaeAtr,
-      fullFillRate: study.fullFillRate
+      fullFillRate: study.fullFillRate,
+      ciLower: study.confidenceIntervalR2?.lower,
+      ciUpper: study.confidenceIntervalR2?.upper,
+      uplift: study.baselineComparisonR2?.uplift,
+      isSignificant: study.baselineComparisonR2?.isStatisticallySignificant
     };
   }
 
@@ -57,10 +65,10 @@ export function buildEffectivenessMatrix(
 }
 
 /**
- * Formats an EffectivenessMatrixReport as a clean terminal / markdown table.
+ * Formats an EffectivenessMatrixReport as a clean terminal / markdown table with statistical significance indicator (*).
  */
 export function formatMatrixMarkdown(report: EffectivenessMatrixReport, timeframes: readonly string[]): string {
-  const header = `| Component | ${timeframes.map(tf => `${tf} (+2R / MFE)`).join(' | ')} |`;
+  const header = `| Component | ${timeframes.map(tf => `${tf} (+2R [95% CI] / MFE / Δ)`).join(' | ')} |`;
   const separator = `| :--- | ${timeframes.map(() => ':---:').join(' | ')} |`;
 
   const body = report.rows.map(row => {
@@ -68,10 +76,22 @@ export function formatMatrixMarkdown(report: EffectivenessMatrixReport, timefram
       const cell = row.cells[tf];
       if (!cell || cell.sampleSize === 0) return '-';
       const pct = (cell.hitRateR2 * 100).toFixed(1);
-      return `${pct}% (${cell.medianMfeAtr.toFixed(2)} ATR, n=${cell.sampleSize})`;
+      const ci = cell.ciLower !== undefined && cell.ciUpper !== undefined
+        ? `[${(cell.ciLower * 100).toFixed(0)}-${(cell.ciUpper * 100).toFixed(0)}%]`
+        : '';
+      const sig = cell.isSignificant ? '*' : '';
+      const upliftPct = cell.uplift !== undefined ? `${cell.uplift >= 0 ? '+' : ''}${(cell.uplift * 100).toFixed(1)}pp` : '';
+      return `${pct}%${sig} ${ci} (${cell.medianMfeAtr.toFixed(1)} ATR, ${upliftPct}, n=${cell.sampleSize})`;
     });
     return `| ${row.component.toUpperCase()} | ${cols.join(' | ')} |`;
   });
 
-  return [`# Effectiveness Matrix: ${report.symbol}`, '', header, separator, ...body].join('\n');
+  return [
+    `# Effectiveness Matrix: ${report.symbol}`,
+    `*Asterisk (*) indicates statistically significant positive edge over unconditional baseline (p < 0.05).`,
+    '',
+    header,
+    separator,
+    ...body
+  ].join('\n');
 }

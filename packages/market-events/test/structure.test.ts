@@ -55,11 +55,11 @@ describe('Deterministic Structure Engine', () => {
     expect(bullOb?.originCandleIndex).toBe(2); // down-close candle at index 2
   });
 
-  it('detects liquidity sweep when price pierces swing wick and closes inside', () => {
+  it('detects and deduplicates liquidity sweep when price pierces swing wick and closes inside', () => {
     const candles: Candle[] = [
       makeCandle(1000, 100, 105, 98, 102),
-      makeCandle(2000, 102, 115, 101, 112), // Swing High at 115
-      makeCandle(3000, 112, 110, 102, 105), // right bar confirms swing high
+      makeCandle(2000, 102, 115, 101, 112), // Swing High 1 at 115
+      makeCandle(3000, 112, 110, 102, 105), // Confirms swing high
       makeCandle(4000, 105, 117, 104, 113)  // Pierces 115 to 117, closes at 113 (reclaim BSL)
     ];
 

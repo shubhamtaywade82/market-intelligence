@@ -14,9 +14,11 @@ describe('Effectiveness Matrix Reporting', () => {
         fill25Rate: 0.72,
         fill50Rate: 0.55,
         fullFillRate: 0.38,
-        medianMfeAtr: 1.45,
+        medianMfeAtr: 1.4,
         medianMaeAtr: 0.75,
-        hitRates: { r1: 0.61, r2: 0.47, r3: 0.28 }
+        hitRates: { r1: 0.61, r2: 0.47, r3: 0.28 },
+        confidenceIntervalR2: { lower: 0.44, upper: 0.50 },
+        baselineComparisonR2: { baselineProbability: 0.40, uplift: 0.07, isStatisticallySignificant: true, pValueEstimate: 0.001 }
       },
       {
         symbol: 'BTCUSDT',
@@ -27,9 +29,11 @@ describe('Effectiveness Matrix Reporting', () => {
         fill25Rate: 0.78,
         fill50Rate: 0.62,
         fullFillRate: 0.41,
-        medianMfeAtr: 1.82,
+        medianMfeAtr: 1.8,
         medianMaeAtr: 0.58,
-        hitRates: { r1: 0.68, r2: 0.54, r3: 0.36 }
+        hitRates: { r1: 0.68, r2: 0.54, r3: 0.36 },
+        confidenceIntervalR2: { lower: 0.50, upper: 0.58 },
+        baselineComparisonR2: { baselineProbability: 0.40, uplift: 0.14, isStatisticallySignificant: true, pValueEstimate: 0.0001 }
       }
     ];
 
@@ -39,7 +43,7 @@ describe('Effectiveness Matrix Reporting', () => {
 
     const markdown = formatMatrixMarkdown(matrix, ['5m', '15m']);
     expect(markdown).toContain('# Effectiveness Matrix: BTCUSDT');
-    expect(markdown).toContain('47.0% (1.45 ATR, n=1200)');
-    expect(markdown).toContain('54.0% (1.82 ATR, n=650)');
+    expect(markdown).toContain('47.0%* [44-50%] (1.4 ATR, +7.0pp, n=1200)');
+    expect(markdown).toContain('54.0%* [50-58%] (1.8 ATR, +14.0pp, n=650)');
   });
 });

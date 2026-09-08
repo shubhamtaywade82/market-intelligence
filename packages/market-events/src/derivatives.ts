@@ -9,7 +9,8 @@ export interface DerivativesOptions {
 }
 
 /**
- * Detects derivatives events: Open Interest expansions/contractions and extreme funding rates.
+ * Detects derivatives events: Open Interest shifts and extreme funding rates as objective observations
+ * without imposing hardcoded directional trade bias.
  */
 export function detectDerivativesEvents(
   snapshots: readonly DerivativesSnapshot[],
@@ -36,7 +37,7 @@ export function detectDerivativesEvents(
           timeframe: options.timeframe,
           detectedAt: current.timestamp,
           originIndex: i,
-          direction: 'bullish',
+          direction: 'bullish', // neutral/descriptive direction field preserved for schema compatibility
           derivativesType: 'oi_expansion',
           metricValue: current.openInterest,
           baselineValue: prev.openInterest
@@ -66,8 +67,7 @@ export function detectDerivativesEvents(
         timeframe: options.timeframe,
         detectedAt: current.timestamp,
         originIndex: i,
-        // Positive funding extreme indicates over-leveraged longs (crowded long, bearish contrarian potential)
-        direction: isPositive ? 'bearish' : 'bullish',
+        direction: isPositive ? 'bullish' : 'bearish', // mirrors actual funding polarity, not subjective contrarian guess
         derivativesType: 'funding_extreme',
         metricValue: current.fundingRate,
         baselineValue: fundingExtreme

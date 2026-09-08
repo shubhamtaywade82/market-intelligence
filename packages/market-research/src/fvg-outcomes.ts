@@ -1,6 +1,6 @@
 import { Decimal } from 'decimal.js';
 import type { Candle, FvgEvent } from '@nemesis-oss/market-events';
-import type { EventOutcome } from './types.js';
+import type { ZoneOutcome } from './types.js';
 
 export interface FvgOutcomeOptions {
   readonly horizonCandles: number;
@@ -9,13 +9,13 @@ export interface FvgOutcomeOptions {
 
 /**
  * Evaluates forward outcomes for an FVG over a fixed forward window.
- * Calculates penetration levels, MFE, MAE, and R-multiples.
+ * Calculates real penetration levels, MFE, MAE, and R-multiples.
  */
 export function evaluateFvgOutcome(
   candles: readonly Candle[],
   fvg: FvgEvent,
   options: FvgOutcomeOptions
-): EventOutcome {
+): ZoneOutcome {
   const startIndex = fvg.originIndex + 1;
   const endIndex = Math.min(candles.length, startIndex + options.horizonCandles);
   const isBull = fvg.direction === 'bullish';

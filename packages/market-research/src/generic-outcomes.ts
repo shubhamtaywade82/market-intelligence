@@ -1,6 +1,6 @@
 import { Decimal } from 'decimal.js';
 import type { Candle, BaseEvent } from '@nemesis-oss/market-events';
-import type { EventOutcome } from './types.js';
+import type { DirectionalOutcome } from './types.js';
 
 export interface GenericOutcomeOptions {
   readonly horizonCandles: number;
@@ -8,13 +8,14 @@ export interface GenericOutcomeOptions {
 }
 
 /**
- * Evaluates forward outcomes for any directional market event over a fixed candle horizon.
+ * Evaluates purely directional forward excursion outcomes (MFE, MAE, R-multiples)
+ * without manufacturing artificial zone fill or touch statistics.
  */
 export function evaluateGenericOutcome(
   candles: readonly Candle[],
   event: BaseEvent,
   options: GenericOutcomeOptions
-): EventOutcome {
+): DirectionalOutcome {
   const startIndex = event.originIndex + 1;
   const endIndex = Math.min(candles.length, startIndex + options.horizonCandles);
   const isBull = event.direction === 'bullish';
@@ -43,11 +44,6 @@ export function evaluateGenericOutcome(
   return {
     eventId: event.id,
     horizonCandles: options.horizonCandles,
-    firstTouchIndex: startIndex,
-    touch25: true,
-    touch50: true,
-    touch75: true,
-    fullFill: true,
     mfe: maxFav,
     mae: maxAdv,
     mfeAtr: risk.gt(0) ? maxFav.dividedBy(risk) : new Decimal(0),
