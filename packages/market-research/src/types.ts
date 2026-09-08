@@ -15,10 +15,8 @@ export type FirstHitResult = 'target_first' | 'stop_first' | 'simultaneous_colli
 export type AmbiguityPolicy = 'pessimistic' | 'optimistic' | 'ambiguous';
 
 export interface OutcomeLabel {
-  readonly startIndex: number;
-  readonly endIndex: number;
-  readonly startTimestamp: number;
-  readonly endTimestamp: number;
+  readonly startIndex: number; readonly endIndex: number;
+  readonly startTimestamp: number; readonly endTimestamp: number;
 }
 
 export interface OutcomeConfig {
@@ -34,13 +32,10 @@ export type PathResolution =
   | 'ambiguous' | 'exact';
 
 export interface TradeOutcome {
-  readonly entryPrice: Decimal;
-  readonly exitPrice: Decimal;
+  readonly entryPrice: Decimal; readonly exitPrice: Decimal;
   readonly exitReason: 'target' | 'stop' | 'horizon_expired' | 'invalidation';
-  readonly realizedR: Decimal;
-  readonly realizedPnl?: Decimal | undefined;
-  readonly wonTrade: boolean;
-  readonly barsHeld: number;
+  readonly realizedR: Decimal; readonly realizedPnl?: Decimal | undefined;
+  readonly wonTrade: boolean; readonly barsHeld: number;
 }
 
 export type TradeExecutionOutcome = TradeOutcome;
@@ -60,10 +55,8 @@ export interface BaseOutcome {
   readonly label?: OutcomeLabel | undefined;
   readonly mfe: Decimal;
   readonly mae: Decimal;
-  readonly mfeAtr: Decimal;
-  readonly maeAtr: Decimal;
-  readonly mfeR: Decimal;
-  readonly maeR: Decimal;
+  readonly mfeAtr: Decimal; readonly maeAtr: Decimal;
+  readonly mfeR: Decimal; readonly maeR: Decimal;
   readonly targetHitR: Decimal;
   /** @deprecated Realized R belongs strictly to TradeOutcome */
   readonly realizedR?: Decimal | undefined;
@@ -72,17 +65,10 @@ export interface BaseOutcome {
   readonly isAmbiguous: boolean;
   readonly pathResolution: PathResolution;
   readonly collision: boolean;
-  readonly targetFirst: boolean;
-  readonly stopFirst: boolean;
-  readonly stopHit: boolean;
-  readonly timeToTarget: number | null;
-  readonly timeToStop: number | null;
-  readonly targetHit1R: boolean;
-  readonly targetHit2R: boolean;
-  readonly targetHit3R: boolean;
-  readonly reached1R: boolean;
-  readonly reached2R: boolean;
-  readonly reached3R: boolean;
+  readonly targetFirst: boolean; readonly stopFirst: boolean; readonly stopHit: boolean;
+  readonly timeToTarget: number | null; readonly timeToStop: number | null;
+  readonly targetHit1R: boolean; readonly targetHit2R: boolean; readonly targetHit3R: boolean;
+  readonly reached1R: boolean; readonly reached2R: boolean; readonly reached3R: boolean;
   readonly timeTo1R?: number | null | undefined;
   readonly timeTo2R?: number | null | undefined;
   readonly timeTo3R?: number | null | undefined;
@@ -140,12 +126,8 @@ export interface ZoneOutcome extends FvgOutcome {
 }
 
 export type EventOutcome =
-  | DirectionalOutcome
-  | FvgOutcome
-  | OrderBlockOutcome
-  | StructureOutcome
-  | LiquiditySweepOutcome
-  | ZoneOutcome;
+  | DirectionalOutcome | FvgOutcome | OrderBlockOutcome
+  | StructureOutcome | LiquiditySweepOutcome | ZoneOutcome;
 
 export interface BootstrapConfidenceInterval {
   readonly lower: number;
@@ -167,21 +149,10 @@ export interface ComponentStudyResult {
   readonly fullFillRate: number | null;
   readonly medianMfeAtr: number;
   readonly medianMaeAtr: number;
-  readonly reachRates: {
-    readonly r1: number;
-    readonly r2: number;
-    readonly r3: number;
-  };
+  readonly reachRates: { readonly r1: number; readonly r2: number; readonly r3: number };
   /** @deprecated Use reachRates */
-  readonly hitRates: {
-    readonly r1: number;
-    readonly r2: number;
-    readonly r3: number;
-  };
-  readonly confidenceIntervalR2?: {
-    readonly lower: number;
-    readonly upper: number;
-  } | undefined;
+  readonly hitRates: { readonly r1: number; readonly r2: number; readonly r3: number };
+  readonly confidenceIntervalR2?: { readonly lower: number; readonly upper: number } | undefined;
   readonly medianMfeAtrCi?: BootstrapConfidenceInterval | undefined;
   readonly baselineComparisonR2?: {
     readonly baselineProbability: number;

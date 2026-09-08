@@ -1,7 +1,7 @@
 import { Decimal } from 'decimal.js';
 import type { BaseEvent, Candle, FvgEvent, OrderBlockEvent, StructureBreakEvent, LiquiditySweepEvent } from '@nemesis-oss/market-events';
 import type { OutcomeConfig, BaseOutcome, OrderBlockOutcome, StructureOutcome, LiquiditySweepOutcome, EventOutcome, ZoneOutcome, PathResolution } from './types.js';
-import { evaluateGenericOutcome, DEFAULT_OUTCOME_CONFIG, resolveCollision } from './generic-outcomes.js';
+import { evaluateGenericOutcome, DEFAULT_OUTCOME_CONFIG, resolveCollision, buildOutcomeLabel } from './generic-outcomes.js';
 
 export { evaluateGenericOutcome, DEFAULT_OUTCOME_CONFIG };
 
@@ -129,9 +129,7 @@ function computeOutcomeStats(
     stopHit: traj.stopHit,
     timeToTarget: traj.timeToTarget,
     timeToStop: traj.timeToStop,
-    targetHit1R: traj.mfe.gte(risk),
-    targetHit2R: traj.mfe.gte(risk.times(2)),
-    targetHit3R: traj.mfe.gte(risk.times(3)),
+    targetHit1R: traj.mfe.gte(risk), targetHit2R: traj.mfe.gte(risk.times(2)), targetHit3R: traj.mfe.gte(risk.times(3)),
     reached1R: traj.firstHit === 'target_first' || traj.mfe.gte(risk),
     reached2R: traj.firstHit === 'target_first' || (traj.firstHit !== 'stop_first' && traj.mfe.gte(risk.times(2))),
     reached3R: traj.firstHit !== 'stop_first' && traj.mfe.gte(risk.times(3)),
@@ -152,25 +150,18 @@ export function evaluateFvgOutcome(
   const risk = span.gt(0) ? span : causalAtr;
   const penRatio = span.isZero() ? new Decimal(0) : traj.maxPenetration.dividedBy(span);
   const stats = computeOutcomeStats(traj, risk, causalAtr, config);
+  const evalIdx = event.availableAtIndex ?? event.originIndex;
 
   return {
     eventId: event.id,
     horizonCandles: config.horizonCandles,
-    mfe: traj.mfe,
-    mae: traj.mae,
-    ...stats,
+    label: buildOutcomeLabel(evalIdx, config.horizonCandles, candles),
+    mfe: traj.mfe, mae: traj.mae, ...stats,
     firstTouchBars: traj.firstTouchBars,
-    firstTouchIndex: traj.firstTouchBars !== null ? (event.availableAtIndex ?? event.originIndex) + traj.firstTouchBars : null,
-    fill25: penRatio.gte(0.25),
-    fill50: penRatio.gte(0.50),
-    fill75: penRatio.gte(0.75),
-    fill100: penRatio.gte(1.0),
-    touch25: penRatio.gte(0.25),
-    touch50: penRatio.gte(0.50),
-    touch75: penRatio.gte(0.75),
-    fullFill: penRatio.gte(1.0),
-    isMitigated: traj.firstTouchBars !== null,
-    isInvalidated: traj.isInvalidated
+    firstTouchIndex: traj.firstTouchBars !== null ? evalIdx + traj.firstTouchBars : null,
+    fill25: penRatio.gte(0.25), fill50: penRatio.gte(0.50), fill75: penRatio.gte(0.75), fill100: penRatio.gte(1.0),
+    touch25: penRatio.gte(0.25), touch50: penRatio.gte(0.50), touch75: penRatio.gte(0.75), fullFill: penRatio.gte(1.0),
+    isMitigated: traj.firstTouchBars !== null, isInvalidated: traj.isInvalidated
   };
 }
 
@@ -184,17 +175,16 @@ export function evaluateOrderBlockOutcome(
   const span = event.top.minus(event.bottom).abs();
   const risk = span.gt(0) ? span : causalAtr;
   const stats = computeOutcomeStats(traj, risk, causalAtr, config);
+  const evalIdx = event.availableAtIndex ?? event.originIndex;
 
   return {
     eventId: event.id,
     horizonCandles: config.horizonCandles,
-    mfe: traj.mfe,
-    mae: traj.mae,
-    ...stats,
+    label: buildOutcomeLabel(evalIdx, config.horizonCandles, candles),
+    mfe: traj.mfe, mae: traj.mae, ...stats,
     firstTouchBars: traj.firstTouchBars,
     maxPenetrationRatio: span.isZero() ? new Decimal(0) : traj.maxPenetration.dividedBy(span),
-    isMitigated: traj.firstTouchBars !== null,
-    isBreaker: traj.isInvalidated
+    isMitigated: traj.firstTouchBars !== null, isBreaker: traj.isInvalidated
   };
 }
 
@@ -252,20 +242,28 @@ export function evaluateLiquiditySweepOutcome(
 ): LiquiditySweepOutcome {
   const base = evaluateGenericOutcome(event, candles, causalAtr, config);
   const isBull = event.direction === 'bullish';
-
-  let isReclaimed = false;
-  let reclaimBars: number | null = null;
-
   const evalIndex = event.availableAtIndex ?? event.originIndex;
+
+  let isReclaimed = false, reclaimBars: number | null = null;
   const horizon = Math.min(candles.length, evalIndex + 1 + config.horizonCandles);
+
+  // Scan lookback for opposing liquidity pool level
+  const lookback = Math.max(0, evalIndex - 20);
+  let opposingLevel = isBull ? candles[lookback]!.high : candles[lookback]!.low;
+  for (let j = lookback; j <= evalIndex; j++) {
+    opposingLevel = isBull ? Decimal.max(opposingLevel, candles[j]!.high) : Decimal.min(opposingLevel, candles[j]!.low);
+  }
+
+  let oppositeLiquidityTaken = false;
   for (let i = evalIndex + 1; i < horizon; i++) {
     const c = candles[i]!;
     const reclaimed = isBull ? c.close.gt(event.sweptLevel) : c.close.lt(event.sweptLevel);
     if (reclaimed && !isReclaimed) {
       isReclaimed = true;
       reclaimBars = i - evalIndex;
-      break;
     }
+    const hitOpposite = isBull ? c.high.gte(opposingLevel) : c.low.lte(opposingLevel);
+    if (hitOpposite) oppositeLiquidityTaken = true;
   }
 
   return {
@@ -273,7 +271,7 @@ export function evaluateLiquiditySweepOutcome(
     isReclaimed,
     reclaimBars,
     postSweepDisplacementAtr: base.mfeAtr,
-    oppositeLiquidityTaken: base.reached2R
+    oppositeLiquidityTaken
   };
 }
 

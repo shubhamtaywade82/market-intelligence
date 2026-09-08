@@ -11,6 +11,8 @@ export interface FrozenHypothesis {
   readonly hypothesisDescription: string;
   readonly trainSampleSize: number;
   readonly trainHitRateR2: number;
+  readonly detectorConfigHash?: string | undefined;
+  readonly outcomeConfigHash?: string | undefined;
 }
 
 export interface WalkForwardWindow {
@@ -80,7 +82,7 @@ function detectEventsByType(
   const { symbol, timeframe } = options;
   if (type === 'fvg') return detectFvg(candles, { symbol, timeframe });
   const swings = detectSwings(candles, { leftBars: 2, rightBars: 2 });
-  if (type === 'bos') return detectStructureBreaks(candles, swings, { symbol, timeframe });
+  if (type === 'bos') return detectStructureBreaks(candles, swings, { symbol, timeframe }).filter(b => b.type === 'bos');
   if (type === 'liquidity_sweep') return detectLiquiditySweeps(candles, swings, { symbol, timeframe });
   if (type === 'order_block') {
     const breaks = detectStructureBreaks(candles, swings, { symbol, timeframe });
@@ -96,7 +98,7 @@ function evaluateRulePerformance(
 ): { rate: number; count: number } {
   const matching = items.filter(({ e, atr }) => rule.predicate(e, candles, atr));
   if (matching.length < 2) return { rate: -1, count: matching.length };
-  const hits = matching.filter(m => m.outcome.hit2R).length;
+  const hits = matching.filter(m => m.outcome.reached2R).length;
   return { rate: hits / matching.length, count: matching.length };
 }
 
@@ -113,12 +115,8 @@ function discoverBestHypothesis(
     const perf = evaluateRulePerformance(rule, items, candles);
     if (perf.rate > best.rate) best = { rule, rate: perf.rate, count: perf.count };
   }
-  const defaultRate = items.length > 0 ? items.filter(m => m.outcome.hit2R).length / items.length : 0;
-  return {
-    bestRule: best.rule,
-    trainHitRate: best.rate >= 0 ? best.rate : defaultRate,
-    trainSample: best.count
-  };
+  const defaultRate = items.length > 0 ? items.filter(m => m.outcome.reached2R).length / items.length : 0;
+  return { bestRule: best.rule, trainHitRate: best.rate >= 0 ? best.rate : defaultRate, trainSample: best.count };
 }
 
 function buildSimpleStudyResult(
@@ -128,11 +126,11 @@ function buildSimpleStudyResult(
   sampleSize: number,
   hitRateR2: number
 ): ComponentStudyResult {
+  const rates = { r1: hitRateR2, r2: hitRateR2, r3: 0 };
   return {
     symbol, timeframe, eventType, sampleSize,
     retestProbability: null, fill25Rate: null, fill50Rate: null, fullFillRate: null,
-    medianMfeAtr: 0, medianMaeAtr: 0,
-    hitRates: { r1: hitRateR2, r2: hitRateR2, r3: 0 }
+    medianMfeAtr: 0, medianMaeAtr: 0, reachRates: rates, hitRates: rates
   };
 }
 
@@ -144,8 +142,10 @@ function evaluateComponentWithHypothesis(
 ): { frozen: FrozenHypothesis; trainResult: ComponentStudyResult; testResult: ComponentStudyResult; purgedCount: number } {
   const { symbol, timeframe, config, purgeHorizon = 0, testStartTime } = options;
   const rawTrain = detectEventsByType(type, trainCandles, { symbol, timeframe });
-  const maxSafe = Math.max(0, trainCandles.length - 1 - purgeHorizon);
-  const trainEvents = purgeHorizon > 0 ? rawTrain.filter(e => e.originIndex <= maxSafe) : rawTrain;
+  // Interval purge: forbid events whose outcome label extends beyond train boundary
+  const trainEvents = purgeHorizon > 0
+    ? rawTrain.filter(e => (e.availableAtIndex ?? e.originIndex) + purgeHorizon < trainCandles.length)
+    : rawTrain;
   const { bestRule, trainHitRate, trainSample } = discoverBestHypothesis(trainEvents, trainCandles, config);
 
   const frozen: FrozenHypothesis = {
@@ -157,7 +157,7 @@ function evaluateComponentWithHypothesis(
   const testEvents = testStartTime !== undefined ? rawTest.filter(e => e.originTimestamp >= testStartTime) : rawTest;
   const testAtrs = testEvents.map(e => calculateCausalAtr(testCandles, e.originIndex));
   const filteredTest = testEvents.filter((e, i) => bestRule.predicate(e, testCandles, testAtrs[i]!));
-  const testHits = filteredTest.filter(e => evaluateEventOutcome(e, testCandles, calculateCausalAtr(testCandles, e.originIndex), config).hit2R).length;
+  const testHits = filteredTest.filter(e => evaluateEventOutcome(e, testCandles, calculateCausalAtr(testCandles, e.originIndex), config).reached2R).length;
   const testHitRate = filteredTest.length > 0 ? testHits / filteredTest.length : 0;
 
   return {
@@ -173,31 +173,23 @@ function computeStabilitySummary(
   components: readonly string[]
 ): readonly StabilitySummary[] {
   return components.map(comp => {
-    let sumTrain = 0;
-    let sumTest = 0;
-    let count = 0;
-
+    let sumTrain = 0, sumTest = 0, count = 0;
     for (const w of windows) {
       const tr = w.trainResults.find(r => r.eventType === comp);
       const te = w.testResults.find(r => r.eventType === comp);
       if (tr && te && tr.sampleSize > 0 && te.sampleSize > 0) {
-        sumTrain += tr.hitRates.r2;
-        sumTest += te.hitRates.r2;
+        sumTrain += tr.reachRates.r2;
+        sumTest += te.reachRates.r2;
         count++;
       }
     }
-
     const meanTrain = count > 0 ? sumTrain / count : 0;
     const meanTest = count > 0 ? sumTest / count : 0;
     const degradation = meanTrain - meanTest;
-
     return {
-      component: comp,
-      windowsCount: count,
-      meanTrainHitRateR2: meanTrain,
-      meanTestHitRateR2: meanTest,
-      hitRateDegradation: degradation,
-      isStable: count > 0 && degradation < 0.15
+      component: comp, windowsCount: count,
+      meanTrainHitRateR2: meanTrain, meanTestHitRateR2: meanTest,
+      hitRateDegradation: degradation, isStable: count > 0 && degradation < 0.15
     };
   });
 }

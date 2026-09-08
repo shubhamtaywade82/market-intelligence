@@ -49,15 +49,17 @@ export function createResearchObservations(
 ): readonly ResearchObservation[] {
   const datasetId = events[0] ? `${events[0].symbol}-${events[0].timeframe}` : 'unknown';
   const datasetHash = computeDatasetSha256(candles);
-  const configHash = computeDeterministicHash(JSON.stringify(config));
+  const outcomeConfigHash = computeDeterministicHash(JSON.stringify(config));
 
   return events.map(ev => {
     const evalIndex = ev.availableAtIndex;
     const context = extractContextSnapshot(candles, evalIndex, htfCandlesMap);
     const outcome = evaluateEventOutcome(ev, candles, context.atr, config);
+    const detectorConfigHash = computeDeterministicHash(`${ev.type}:${ev.symbol}:${ev.timeframe}`);
     const provenance: Provenance = {
       datasetId, datasetHash, detectorId: ev.type,
-      detectorVersion: '1.0.0', detectorConfigHash: configHash, outcomeVersion: '1.0.0'
+      detectorVersion: ev.version ?? '1.0.0',
+      detectorConfigHash, outcomeConfigHash, outcomeVersion: '1.0.0'
     };
 
     return { event: ev, context, outcome, provenance };
@@ -141,10 +143,11 @@ function computeStudyStats(data: StudyResultData, sampleSize: number) {
     eventHits: hit2, eventTrials: sampleSize, baselineHits: controlOutcomes.filter(o => o.reached2R).length,
     baselineTrials: controlOutcomes.length, clusterSizes, eventClusters: data.eventClusters, baselineClusters: data.baselineClusters
   });
+  const reachRates = { r1: outcomes.filter(o => o.reached1R).length / sampleSize, r2: hit2 / sampleSize, r3: outcomes.filter(o => o.reached3R).length / sampleSize };
   return {
     fvgRates: isFvg ? { r: fvg.filter(o => o.firstTouchBars !== null).length / sampleSize, f25: fvg.filter(o => o.fill25).length / sampleSize, f50: fvg.filter(o => o.fill50).length / sampleSize, f100: fvg.filter(o => o.fill100).length / sampleSize } : null,
     mfe, medianMfeCi: calculateBootstrapMedianCi(mfe), intervalR2: calculateWilsonInterval(hit2, sampleSize),
-    hitRates: { r1: outcomes.filter(o => o.reached1R).length / sampleSize, r2: hit2 / sampleSize, r3: outcomes.filter(o => o.reached3R).length / sampleSize },
+    reachRates, hitRates: reachRates,
     baseline
   };
 }
@@ -153,10 +156,11 @@ function buildStudyResult(data: StudyResultData): ComponentStudyResult {
   const { meta, outcomes, clusterSizes } = data;
   const sampleSize = outcomes.length;
   if (sampleSize === 0) {
+    const zeroRates = { r1: 0, r2: 0, r3: 0 };
     return {
       symbol: meta.symbol, timeframe: meta.timeframe, eventType: meta.eventType, sampleSize: 0,
       retestProbability: null, fill25Rate: null, fill50Rate: null, fullFillRate: null,
-      medianMfeAtr: 0, medianMaeAtr: 0, hitRates: { r1: 0, r2: 0, r3: 0 }
+      medianMfeAtr: 0, medianMaeAtr: 0, reachRates: zeroRates, hitRates: zeroRates
     };
   }
   const s = computeStudyStats(data, sampleSize);
@@ -166,7 +170,7 @@ function buildStudyResult(data: StudyResultData): ComponentStudyResult {
     retestProbability: s.fvgRates?.r ?? null, fill25Rate: s.fvgRates?.f25 ?? null,
     fill50Rate: s.fvgRates?.f50 ?? null, fullFillRate: s.fvgRates?.f100 ?? null,
     medianMfeAtr: calculateMedian(s.mfe), medianMaeAtr: calculateMedian(outcomes.map(o => o.maeAtr.toNumber())),
-    medianMfeAtrCi: s.medianMfeCi, hitRates: s.hitRates,
+    medianMfeAtrCi: s.medianMfeCi, reachRates: s.reachRates, hitRates: s.hitRates,
     confidenceIntervalR2: { lower: s.intervalR2.lower, upper: s.intervalR2.upper },
     baselineComparisonR2: {
       baselineProbability: s.baseline.baselineProbability, uplift: s.baseline.uplift,
@@ -272,7 +276,9 @@ export function toResearchResult(
     sample,
     controls: { sampleSize: studyResult.sampleSize, matchedHitRateR2: baseComp?.baselineProbability ?? 0, matchRatio: matchRatio ?? 0 },
     descriptive: {
-      hitRates: studyResult.hitRates, medianMfeAtr: studyResult.medianMfeAtr, medianMaeAtr: studyResult.medianMaeAtr,
+      reachRates: studyResult.reachRates,
+      hitRates: studyResult.hitRates,
+      medianMfeAtr: studyResult.medianMfeAtr, medianMaeAtr: studyResult.medianMaeAtr,
       retestProbability: studyResult.retestProbability, fill25Rate: studyResult.fill25Rate,
       fill50Rate: studyResult.fill50Rate, fullFillRate: studyResult.fullFillRate
     },

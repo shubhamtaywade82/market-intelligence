@@ -279,5 +279,12 @@ describe('Cluster-Aware Statistical Inference', () => {
     expect(pessOutcome.stopHit).toBe(true);
     expect(pessOutcome.timeToTarget).toBe(1);
     expect(pessOutcome.timeToStop).toBe(1);
+    expect(pessOutcome.timeTo1R).toBe(1);
+    expect(pessOutcome.timeTo2R).toBe(1);
+    expect(pessOutcome.timeTo3R).toBe(1);
+    expect(pessOutcome.label?.startIndex).toBe(0);
+    expect(pessOutcome.label?.endIndex).toBe(1);
+    expect(pessOutcome.label?.startTimestamp).toBe(1000);
+    expect(pessOutcome.label?.endTimestamp).toBe(2000);
   });
 });

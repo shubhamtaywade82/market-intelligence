@@ -144,5 +144,44 @@ describe('Deterministic Structure Engine', () => {
       expect(ev.availableAtTimestamp).toBeGreaterThanOrEqual(ev.originTimestamp);
     }
   });
+
+  it('rejects timeline stage violations where origin <= formed <= confirmed <= available is broken', () => {
+    const validEvent = {
+      id: 'test-1', type: 'bos' as const, symbol: 'BTC', timeframe: '15m' as const,
+      detectedAt: 5000, originIndex: 1, originTimestamp: 1000,
+      availableAtIndex: 4, availableAtTimestamp: 4000, direction: 'bullish' as const,
+      timeline: {
+        originIndex: 1, originTimestamp: 1000,
+        formedAtIndex: 2, formedAtTimestamp: 2000,
+        confirmedAtIndex: 3, confirmedAtTimestamp: 3000,
+        availableAtIndex: 4, availableAtTimestamp: 4000
+      }
+    };
+    expect(() => validateEventCausality(validEvent)).not.toThrow();
+
+    // formed < origin violation
+    expect(() => validateEventCausality({
+      ...validEvent,
+      timeline: { ...validEvent.timeline!, formedAtIndex: 0 }
+    })).toThrow(/formedAtIndex/);
+
+    // confirmed < formed violation
+    expect(() => validateEventCausality({
+      ...validEvent,
+      timeline: { ...validEvent.timeline!, confirmedAtIndex: 1 }
+    })).toThrow(/confirmedAtIndex/);
+
+    // available < confirmed violation
+    expect(() => validateEventCausality({
+      ...validEvent,
+      timeline: { ...validEvent.timeline!, availableAtIndex: 2 }
+    })).toThrow(/availableAtIndex/);
+
+    // timestamp inversion violation
+    expect(() => validateEventCausality({
+      ...validEvent,
+      timeline: { ...validEvent.timeline!, confirmedAtTimestamp: 1500 }
+    })).toThrow(/confirmedAtTimestamp/);
+  });
 });
 

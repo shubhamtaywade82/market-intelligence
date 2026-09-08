@@ -81,9 +81,12 @@ describe('Study Runner & Context Features', () => {
     expect(firstObs.context.atr.gt(0)).toBe(true);
     expect(firstObs.context.trendRegime).toBeDefined();
     expect(firstObs.outcome.targetHitR).toBeDefined();
+    expect(firstObs.outcome.label?.startIndex).toBe(firstObs.event.availableAtIndex);
+    expect(firstObs.outcome.label?.endIndex).toBeGreaterThanOrEqual(firstObs.outcome.label!.startIndex);
     expect(firstObs.provenance.datasetId).toBe('BTCUSDT-15m');
     expect(firstObs.provenance.datasetHash).toHaveLength(64);
     expect(firstObs.provenance.detectorConfigHash).toHaveLength(16);
+    expect(firstObs.provenance.outcomeConfigHash).toHaveLength(16);
     expect(firstObs.provenance.detectorVersion).toBe('1.0.0');
     expect(firstObs.provenance.outcomeVersion).toBe('1.0.0');
   });
@@ -106,6 +109,7 @@ describe('Study Runner & Context Features', () => {
     expect(researchResult.population.symbol).toBe('BTCUSDT');
     expect(researchResult.population.candleCount).toBe(5);
     expect(researchResult.sample.eventType).toBe('fvg');
+    expect(researchResult.descriptive.reachRates).toBeDefined();
     expect(researchResult.descriptive.hitRates).toBeDefined();
     expect(researchResult.provenance.datasetId).toBe('BTCUSDT-15m');
     expect(researchResult.dependence.pValueEstimate).toBeDefined();

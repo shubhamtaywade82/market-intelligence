@@ -1,6 +1,6 @@
 import { Decimal } from 'decimal.js';
 import type { BaseEvent, Candle } from '@nemesis-oss/market-events';
-import type { OutcomeConfig, BaseOutcome, DirectionalOutcome, PathResolution, TradeExecutionOutcome } from './types.js';
+import type { OutcomeConfig, BaseOutcome, DirectionalOutcome, PathResolution, TradeExecutionOutcome, OutcomeLabel } from './types.js';
 
 export const DEFAULT_OUTCOME_CONFIG: OutcomeConfig = {
   horizonCandles: 24,
@@ -22,6 +22,9 @@ interface TrajectoryResult {
   readonly stopHit: boolean;
   readonly timeToTarget: number | null;
   readonly timeToStop: number | null;
+  readonly timeTo1R: number | null;
+  readonly timeTo2R: number | null;
+  readonly timeTo3R: number | null;
 }
 
 export function resolveCollision(policy: OutcomeConfig['ambiguityPolicy']): BaseOutcome['firstHit'] {
@@ -78,6 +81,7 @@ export function evaluateTrajectory(
   let isAmbiguous = false, collision = false, stopHit = false;
   let pathResolution: PathResolution = 'ohlc_resolved';
   let timeToTarget: number | null = null, timeToStop: number | null = null;
+  let timeTo1R: number | null = null, timeTo2R: number | null = null, timeTo3R: number | null = null;
 
   const horizon = Math.min(candles.length, startOffset + config.horizonCandles);
   for (let i = startOffset; i < horizon; i++) {
@@ -87,6 +91,11 @@ export function evaluateTrajectory(
     if (fav.gt(mfe)) mfe = fav;
     const adv = isBull ? entry.minus(c.low) : c.high.minus(entry);
     if (adv.gt(mae)) mae = adv;
+
+    const favAtr = atr.gt(0) ? fav.dividedBy(atr) : new Decimal(0);
+    if (favAtr.gte(1) && timeTo1R === null) timeTo1R = offset;
+    if (favAtr.gte(2) && timeTo2R === null) timeTo2R = offset;
+    if (favAtr.gte(3) && timeTo3R === null) timeTo3R = offset;
 
     const { hitTarget, hitStop } = checkBarHit(c, isBull, target, stop);
     if (hitStop && !stopHit) { stopHit = true; timeToStop = offset; }
@@ -119,8 +128,20 @@ export function evaluateTrajectory(
 
   return {
     mfe, mae, firstHit, timeToFirstHitBars: timeToHit, isAmbiguous, pathResolution, collision,
-    targetFirst: firstHit === 'target_first', stopFirst: firstHit === 'stop_first', stopHit, timeToTarget, timeToStop
+    targetFirst: firstHit === 'target_first', stopFirst: firstHit === 'stop_first', stopHit,
+    timeToTarget, timeToStop, timeTo1R, timeTo2R, timeTo3R
   };
+}
+
+export function buildOutcomeLabel(
+  evalIndex: number,
+  horizonCandles: number,
+  candles: readonly Candle[]
+): OutcomeLabel {
+  const endIndex = Math.min(candles.length - 1, evalIndex + horizonCandles);
+  const startTimestamp = candles[evalIndex]?.timestamp ?? 0;
+  const endTimestamp = candles[endIndex]?.timestamp ?? startTimestamp;
+  return { startIndex: evalIndex, endIndex, startTimestamp, endTimestamp };
 }
 
 export function evaluateGenericOutcome(
@@ -151,6 +172,7 @@ export function evaluateGenericOutcome(
   return {
     eventId: event.id,
     horizonCandles: config.horizonCandles,
+    label: buildOutcomeLabel(evalIndex, config.horizonCandles, candles),
     mfe: traj.mfe,
     mae: traj.mae,
     mfeAtr,
@@ -168,6 +190,9 @@ export function evaluateGenericOutcome(
     stopHit: traj.stopHit,
     timeToTarget: traj.timeToTarget,
     timeToStop: traj.timeToStop,
+    timeTo1R: traj.timeTo1R,
+    timeTo2R: traj.timeTo2R,
+    timeTo3R: traj.timeTo3R,
     targetHit1R: mfeAtr.gte(1),
     targetHit2R: mfeAtr.gte(2),
     targetHit3R: mfeAtr.gte(3),
