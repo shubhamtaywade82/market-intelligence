@@ -76,7 +76,7 @@ export function detectHarmonicPatterns(
 
         events.push({
           id: `${options.symbol}-${options.timeframe}-harmonic-${config.name}-${d.timestamp}`,
-          type: 'harmonic',
+          type: 'harmonic_pattern',
           symbol: options.symbol,
           timeframe: options.timeframe,
           detectedAt: d.timestamp,

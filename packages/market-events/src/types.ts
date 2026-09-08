@@ -28,8 +28,7 @@ export type MarketEventType =
   | 'wyckoff'
   | 'chart_pattern'
   | 'harmonic_pattern'
-  | 'control'
-  | (string & {});
+  | 'control';
 
 export interface BaseEvent {
   readonly id: string;
@@ -233,7 +232,7 @@ export interface ChartPatternEvent extends BaseEvent {
 export type HarmonicPatternType = 'gartley' | 'bat' | 'butterfly' | 'crab';
 
 export interface HarmonicPatternEvent extends BaseEvent {
-  readonly type: 'harmonic';
+  readonly type: 'harmonic_pattern';
   readonly harmonicType: HarmonicPatternType;
   readonly xPrice: Decimal;
   readonly aPrice: Decimal;

@@ -57,23 +57,25 @@ function extractFeatureValue(obs: ResearchObservation, name: string): string | n
   return undefined;
 }
 
-export function feature(name: 'trendRegime' | 'volatilityRegime' | 'session' | 'direction' | 'eventType'): StringFeatureBuilder;
-export function feature(name: 'atr' | 'mfeAtr' | 'maeAtr'): NumberFeatureBuilder;
-export function feature(name: string): StringFeatureBuilder | NumberFeatureBuilder {
-  const isNumeric = ['atr', 'mfeAtr', 'maeAtr'].includes(name);
+export type ContextStringFeature = 'trendRegime' | 'volatilityRegime' | 'session' | 'direction' | 'eventType';
+export type ContextNumericFeature = 'atr';
+export type ContextFeatureName = ContextStringFeature | ContextNumericFeature;
 
-  if (isNumeric) {
-    const numBuilder: NumberFeatureBuilder = {
-      eq: (val: number): ConditionExpression => ({ type: 'comparison', description: `${name} == ${val}`, evaluate: (o: ResearchObservation) => Number(extractFeatureValue(o, name)) === val }),
-      gt: (val: number): ConditionExpression => ({ type: 'comparison', description: `${name} > ${val}`, evaluate: (o: ResearchObservation) => Number(extractFeatureValue(o, name)) > val }),
-      gte: (val: number): ConditionExpression => ({ type: 'comparison', description: `${name} >= ${val}`, evaluate: (o: ResearchObservation) => Number(extractFeatureValue(o, name)) >= val }),
-      lt: (val: number): ConditionExpression => ({ type: 'comparison', description: `${name} < ${val}`, evaluate: (o: ResearchObservation) => Number(extractFeatureValue(o, name)) < val }),
-      lte: (val: number): ConditionExpression => ({ type: 'comparison', description: `${name} <= ${val}`, evaluate: (o: ResearchObservation) => Number(extractFeatureValue(o, name)) <= val })
-    };
-    return numBuilder;
-  }
+export type OutcomeNumericFeature = 'mfeAtr' | 'maeAtr';
+export type OutcomeFeatureName = OutcomeNumericFeature;
 
-  const strBuilder: StringFeatureBuilder = {
+function createNumericFeatureBuilder(name: string): NumberFeatureBuilder {
+  return {
+    eq: (val: number): ConditionExpression => ({ type: 'comparison', description: `${name} == ${val}`, evaluate: (o: ResearchObservation) => Number(extractFeatureValue(o, name)) === val }),
+    gt: (val: number): ConditionExpression => ({ type: 'comparison', description: `${name} > ${val}`, evaluate: (o: ResearchObservation) => Number(extractFeatureValue(o, name)) > val }),
+    gte: (val: number): ConditionExpression => ({ type: 'comparison', description: `${name} >= ${val}`, evaluate: (o: ResearchObservation) => Number(extractFeatureValue(o, name)) >= val }),
+    lt: (val: number): ConditionExpression => ({ type: 'comparison', description: `${name} < ${val}`, evaluate: (o: ResearchObservation) => Number(extractFeatureValue(o, name)) < val }),
+    lte: (val: number): ConditionExpression => ({ type: 'comparison', description: `${name} <= ${val}`, evaluate: (o: ResearchObservation) => Number(extractFeatureValue(o, name)) <= val })
+  };
+}
+
+function createStringFeatureBuilder(name: string): StringFeatureBuilder {
+  return {
     eq: (val: string): ConditionExpression => ({ type: 'comparison', description: `${name} == '${val}'`, evaluate: (o: ResearchObservation) => String(extractFeatureValue(o, name)) === val }),
     neq: (val: string): ConditionExpression => ({ type: 'comparison', description: `${name} != '${val}'`, evaluate: (o: ResearchObservation) => String(extractFeatureValue(o, name)) !== val }),
     in: (vals: readonly string[]): ConditionExpression => ({
@@ -82,7 +84,29 @@ export function feature(name: string): StringFeatureBuilder | NumberFeatureBuild
       evaluate: (o: ResearchObservation) => vals.includes(String(extractFeatureValue(o, name)))
     })
   };
-  return strBuilder;
+}
+
+/**
+ * Builds conditions on predictive context features (available at observation time, zero outcome leakage).
+ */
+export function contextFeature(name: ContextStringFeature): StringFeatureBuilder;
+export function contextFeature(name: ContextNumericFeature): NumberFeatureBuilder;
+export function contextFeature(name: ContextFeatureName): StringFeatureBuilder | NumberFeatureBuilder {
+  return name === 'atr' ? createNumericFeatureBuilder(name) : createStringFeatureBuilder(name);
+}
+
+/**
+ * Builds conditions on ex-post outcome metrics for outcome-stratification analysis only.
+ */
+export function outcomeFeature(name: OutcomeNumericFeature): NumberFeatureBuilder {
+  return createNumericFeatureBuilder(name);
+}
+
+export function feature(name: ContextStringFeature): StringFeatureBuilder;
+export function feature(name: ContextNumericFeature | OutcomeNumericFeature): NumberFeatureBuilder;
+export function feature(name: string): StringFeatureBuilder | NumberFeatureBuilder {
+  const isNumeric = ['atr', 'mfeAtr', 'maeAtr'].includes(name);
+  return isNumeric ? createNumericFeatureBuilder(name) : createStringFeatureBuilder(name);
 }
 
 export function htfTrend(tf: Timeframe): StringFeatureBuilder {

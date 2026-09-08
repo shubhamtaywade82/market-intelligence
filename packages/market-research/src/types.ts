@@ -8,6 +8,7 @@ export interface Provenance {
   readonly detectorVersion: string;
   readonly detectorConfigHash: string;
   readonly outcomeVersion: string;
+  readonly outcomeDefinitionHash?: string | undefined;
 }
 
 export type FirstHitResult =
@@ -26,7 +27,9 @@ export interface OutcomeConfig {
 }
 
 export type PathResolution =
+  | 'single_bar_unambiguous'
   | 'ohlc_resolved'
+  | 'ohlc_collision'
   | 'lower_tf_resolved'
   | 'tick_resolved'
   | 'ohlc_pessimistic'
@@ -34,13 +37,25 @@ export type PathResolution =
   | 'ambiguous'
   | 'exact';
 
-export interface TradeExecutionOutcome {
+export interface TradeOutcome {
   readonly entryPrice: Decimal;
   readonly exitPrice: Decimal;
   readonly exitReason: 'target' | 'stop' | 'horizon_expired' | 'invalidation';
   readonly realizedR: Decimal;
+  readonly realizedPnl?: Decimal | undefined;
   readonly wonTrade: boolean;
   readonly barsHeld: number;
+}
+
+export type TradeExecutionOutcome = TradeOutcome;
+
+export interface OutcomeDefinition {
+  readonly measurementAnchor: 'origin_close' | 'available_close' | 'zone_boundary' | 'extreme_level';
+  readonly entryReference: string;
+  readonly riskReference: 'causal_atr' | 'zone_span' | 'fixed_ticks' | 'swing_extreme';
+  readonly targetDefinition: string;
+  readonly stopDefinition: string;
+  readonly invalidationDefinition?: string | undefined;
 }
 
 export interface BaseOutcome {
@@ -78,6 +93,8 @@ export interface BaseOutcome {
   /** @deprecated Alias for reached3R */
   readonly hit3R: boolean;
 }
+
+export type MarketOutcome = BaseOutcome;
 
 export interface DirectionalOutcome extends BaseOutcome {}
 
@@ -228,6 +245,15 @@ export interface ResearchDependenceStats {
   readonly isFdrSignificant?: boolean | undefined;
 }
 
+export type EvidenceStatus =
+  | 'descriptive_only'
+  | 'exploratory'
+  | 'train_supported'
+  | 'oos_supported'
+  | 'robust'
+  | 'insufficient_sample'
+  | 'confounded';
+
 export interface ResearchResult {
   readonly population: ResearchPopulationInfo;
   readonly sample: ResearchSampleInfo;
@@ -237,6 +263,7 @@ export interface ResearchResult {
   readonly uncertainty: ResearchUncertaintyStats;
   readonly dependence: ResearchDependenceStats;
   readonly provenance: Provenance;
+  readonly evidenceStatus?: EvidenceStatus | undefined;
 }
 
 export type MarketSession = 'asia' | 'london' | 'new_york' | 'off_hours';

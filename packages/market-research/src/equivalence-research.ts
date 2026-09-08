@@ -67,25 +67,60 @@ export interface BehavioralEquivalenceResult {
   readonly absoluteDifference: number;
   readonly zScore: number;
   readonly pValue: number;
+  readonly tostPValue: number;
+  readonly tostZ1: number;
+  readonly tostZ2: number;
+  readonly confidenceInterval90: { readonly lower: number; readonly upper: number };
   readonly isBehaviorallyEquivalent: boolean;
   readonly equivalenceMargin: number;
 }
 
+export function calculateTost(
+  pA: number,
+  nA: number,
+  pB: number,
+  nB: number,
+  delta: number
+): { z1: number; z2: number; tostPValue: number; se: number } {
+  const diff = pA - pB;
+  const varA = (pA * (1 - pA)) / nA;
+  const varB = (pB * (1 - pB)) / nB;
+  const se = Math.sqrt(varA + varB);
+
+  if (se === 0) {
+    const isEq = Math.abs(diff) < delta;
+    return { z1: isEq ? 999 : -999, z2: isEq ? -999 : 999, tostPValue: isEq ? 0 : 1, se: 0 };
+  }
+
+  // Z1 tests H01: diff <= -delta
+  const z1 = (diff + delta) / se;
+  const p1 = 1 - normalCdf(z1);
+
+  // Z2 tests H02: diff >= delta
+  const z2 = (diff - delta) / se;
+  const p2 = normalCdf(z2);
+
+  return { z1, z2, tostPValue: Math.max(p1, p2), se };
+}
+
 /**
- * Tests whether two event families produce statistically indistinguishable post-event outcomes.
+ * Formal Two One-Sided Tests (TOST) for behavioral equivalence between event families.
+ * Rejects H0: |pA - pB| >= delta when tostPValue <= alpha (both one-sided tests reject).
  */
 export function testOutcomeEquivalence(
   observationsA: readonly ResearchObservation[],
   observationsB: readonly ResearchObservation[],
   targetMetric: 'hit1R' | 'hit2R' | 'hit3R' = 'hit2R',
-  equivalenceMargin: number = 0.08
+  equivalenceMargin: number = 0.08,
+  alpha: number = 0.05
 ): BehavioralEquivalenceResult {
   const nA = observationsA.length;
   const nB = observationsB.length;
   if (nA === 0 || nB === 0) {
     return {
       sampleSizeA: nA, sampleSizeB: nB, hitRateA: 0, hitRateB: 0,
-      absoluteDifference: 0, zScore: 0, pValue: 1.0,
+      absoluteDifference: 0, zScore: 0, pValue: 1.0, tostPValue: 1.0, tostZ1: 0, tostZ2: 0,
+      confidenceInterval90: { lower: 0, upper: 0 },
       isBehaviorallyEquivalent: false, equivalenceMargin
     };
   }
@@ -97,10 +132,14 @@ export function testOutcomeEquivalence(
   const diff = Math.abs(pA - pB);
 
   const pooledP = (countA + countB) / (nA + nB);
-  const se = Math.sqrt(pooledP * (1 - pooledP) * (1 / nA + 1 / nB));
-  const zScore = se > 0 ? (pA - pB) / se : 0;
+  const pooledSe = Math.sqrt(pooledP * (1 - pooledP) * (1 / nA + 1 / nB));
+  const zScore = pooledSe > 0 ? (pA - pB) / pooledSe : 0;
   const pValue = 2 * (1 - normalCdf(Math.abs(zScore)));
-  const isBehaviorallyEquivalent = diff <= equivalenceMargin && pValue >= 0.05;
+
+  const tost = calculateTost(pA, nA, pB, nB, equivalenceMargin);
+  const z90 = 1.64485;
+  const ci90 = { lower: (pA - pB) - z90 * tost.se, upper: (pA - pB) + z90 * tost.se };
+  const isBehaviorallyEquivalent = tost.tostPValue <= alpha;
 
   return {
     sampleSizeA: nA,
@@ -110,6 +149,10 @@ export function testOutcomeEquivalence(
     absoluteDifference: diff,
     zScore,
     pValue,
+    tostPValue: tost.tostPValue,
+    tostZ1: tost.z1,
+    tostZ2: tost.z2,
+    confidenceInterval90: ci90,
     isBehaviorallyEquivalent,
     equivalenceMargin
   };

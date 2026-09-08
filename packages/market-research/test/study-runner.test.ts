@@ -109,6 +109,7 @@ describe('Study Runner & Context Features', () => {
     expect(researchResult.descriptive.hitRates).toBeDefined();
     expect(researchResult.provenance.datasetId).toBe('BTCUSDT-15m');
     expect(researchResult.dependence.pValueEstimate).toBeDefined();
+    expect(researchResult.evidenceStatus).toBe('insufficient_sample');
   });
 
   it('integrates multiple-testing correction across component study results', () => {

@@ -7,6 +7,8 @@ import {
   any,
   not,
   feature,
+  contextFeature,
+  outcomeFeature,
   htfTrend,
   evaluateCondition
 } from '../src/condition-engine.js';
@@ -86,6 +88,17 @@ describe('Condition Engine & Predicate Expressions', () => {
     expect(feature('trendRegime').eq('bearish').evaluate(obs)).toBe(false);
     expect(feature('session').in(['london', 'new_york']).evaluate(obs)).toBe(true);
     expect(feature('session').in(['asia']).evaluate(obs)).toBe(false);
+  });
+
+  it('strictly separates predictive context features from ex-post outcome features', () => {
+    const obs = createDummyObservation({ atr: 12.5, mfeAtr: 3.2, trendRegime: 'bullish' });
+
+    // Predictive context features: zero future outcome leakage
+    expect(contextFeature('atr').gte(12).evaluate(obs)).toBe(true);
+    expect(contextFeature('trendRegime').eq('bullish').evaluate(obs)).toBe(true);
+
+    // Outcome features for post-stratification only
+    expect(outcomeFeature('mfeAtr').gt(3.0).evaluate(obs)).toBe(true);
   });
 
   it('evaluates numeric feature inequalities', () => {

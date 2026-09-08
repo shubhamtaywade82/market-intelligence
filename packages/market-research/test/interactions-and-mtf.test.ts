@@ -174,8 +174,16 @@ describe('Time-to-Event Survival Analysis', () => {
     expect(profile.survivalCurve).toHaveLength(10);
     // At bar 1: both survive unmitigated (first touches are at 2 and 4)
     expect(profile.survivalCurve[0]!.survivalRate).toBe(1.0);
+    expect(profile.survivalCurve[0]!.cumulativeTargetRate).toBe(0.0);
+    expect(profile.survivalCurve[0]!.cumulativeStopRate).toBe(0.0);
+    expect(profile.survivalCurve[0]!.cumulativeNeitherRate).toBe(1.0);
+    // At bar 3: f-1 has hit target (timeToFirstHitBars = 3) -> 1 of 2 = 0.5
+    expect(profile.survivalCurve[2]!.cumulativeTargetRate).toBe(0.5);
+    expect(profile.survivalCurve[2]!.cumulativeNeitherRate).toBe(0.5);
     // At bar 5: both have been touched (0 survival)
     expect(profile.survivalCurve[4]!.survivalRate).toBe(0.0);
+    expect(profile.survivalCurve[4]!.cumulativeTargetRate).toBe(1.0);
+    expect(profile.survivalCurve[4]!.cumulativeNeitherRate).toBe(0.0);
   });
 
   it('computes non-parametric empirical excursion quantiles and threshold distributions', () => {

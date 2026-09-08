@@ -102,28 +102,31 @@ describe('Equivalence Research Engine', () => {
   });
 
   it('tests behavioral equivalence based on outcome distributions', () => {
-    // Group A: 25 hits out of 50 (50%)
+    // Group A: 250 hits out of 500 (50%)
     const groupA: ResearchObservation[] = [];
-    for (let i = 0; i < 50; i++) groupA.push(makeObservation(`a-${i}`, i < 25));
+    for (let i = 0; i < 500; i++) groupA.push(makeObservation(`a-${i}`, i < 250));
 
-    // Group B: 26 hits out of 50 (52%) - statistically indistinguishable within 8% margin
+    // Group B: 255 hits out of 500 (51%) - rigorously equivalent within 8% margin via TOST
     const groupB: ResearchObservation[] = [];
-    for (let i = 0; i < 50; i++) groupB.push(makeObservation(`b-${i}`, i < 26));
+    for (let i = 0; i < 500; i++) groupB.push(makeObservation(`b-${i}`, i < 255));
 
-    // Group C: 45 hits out of 50 (90%) - significantly different
+    // Group C: 450 hits out of 500 (90%) - significantly non-equivalent
     const groupC: ResearchObservation[] = [];
-    for (let i = 0; i < 50; i++) groupC.push(makeObservation(`c-${i}`, i < 45));
+    for (let i = 0; i < 500; i++) groupC.push(makeObservation(`c-${i}`, i < 450));
 
     const equivResult = testOutcomeEquivalence(groupA, groupB, 'hit2R', 0.08);
     expect(equivResult.hitRateA).toBe(0.5);
-    expect(equivResult.hitRateB).toBe(0.52);
-    expect(equivResult.absoluteDifference).toBeCloseTo(0.02, 4);
+    expect(equivResult.hitRateB).toBe(0.51);
+    expect(equivResult.absoluteDifference).toBeCloseTo(0.01, 4);
+    expect(equivResult.tostPValue).toBeLessThan(0.05);
     expect(equivResult.isBehaviorallyEquivalent).toBe(true);
+    expect(equivResult.confidenceInterval90.lower).toBeGreaterThan(-0.08);
+    expect(equivResult.confidenceInterval90.upper).toBeLessThan(0.08);
 
     const nonEquivResult = testOutcomeEquivalence(groupA, groupC, 'hit2R', 0.08);
     expect(nonEquivResult.absoluteDifference).toBeCloseTo(0.40, 4);
     expect(nonEquivResult.isBehaviorallyEquivalent).toBe(false);
-    expect(nonEquivResult.pValue).toBeLessThan(0.001);
+    expect(nonEquivResult.tostPValue).toBeGreaterThan(0.05);
   });
 });
 

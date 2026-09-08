@@ -4,12 +4,15 @@ export interface SurvivalStep {
   readonly bars: number;
   readonly survivalRate: number; // P(unmitigated at bar t)
   readonly cumulativeTargetRate: number; // P(target reached <= bar t)
+  readonly cumulativeStopRate: number; // P(stop reached <= bar t)
+  readonly cumulativeNeitherRate: number; // P(neither reached by bar t)
 }
 
 export interface TimeToEventProfile {
   readonly sampleSize: number;
   readonly medianBarsToTouch: number | null;
   readonly medianBarsToTarget: number | null;
+  readonly medianBarsToStop: number | null;
   readonly survivalCurve: readonly SurvivalStep[];
 }
 
@@ -21,7 +24,7 @@ function calculatePercentile(values: number[], p: number): number | null {
 }
 
 /**
- * Computes non-parametric empirical survival curves and time-to-event distributions.
+ * Computes non-parametric empirical survival curves and competing-risk time-to-event distributions.
  */
 export function computeTimeToEventProfile(
   outcomes: readonly (FvgOutcome | BaseOutcome)[],
@@ -29,11 +32,12 @@ export function computeTimeToEventProfile(
 ): TimeToEventProfile {
   const sampleSize = outcomes.length;
   if (sampleSize === 0) {
-    return { sampleSize: 0, medianBarsToTouch: null, medianBarsToTarget: null, survivalCurve: [] };
+    return { sampleSize: 0, medianBarsToTouch: null, medianBarsToTarget: null, medianBarsToStop: null, survivalCurve: [] };
   }
 
   const touchBars: number[] = [];
   const targetBars: number[] = [];
+  const stopBars: number[] = [];
 
   for (const o of outcomes) {
     if ('firstTouchBars' in o && typeof o.firstTouchBars === 'number') {
@@ -41,6 +45,8 @@ export function computeTimeToEventProfile(
     }
     if (o.firstHit === 'target_first' && o.timeToFirstHitBars > 0) {
       targetBars.push(o.timeToFirstHitBars);
+    } else if (o.firstHit === 'stop_first' && o.timeToFirstHitBars > 0) {
+      stopBars.push(o.timeToFirstHitBars);
     }
   }
 
@@ -53,11 +59,16 @@ export function computeTimeToEventProfile(
     }).length;
 
     const reachedTarget = targetBars.filter(b => b <= t).length;
+    const reachedStop = stopBars.filter(b => b <= t).length;
+    const pTarget = reachedTarget / sampleSize;
+    const pStop = reachedStop / sampleSize;
 
     survivalCurve.push({
       bars: t,
       survivalRate: surviving / sampleSize,
-      cumulativeTargetRate: reachedTarget / sampleSize
+      cumulativeTargetRate: pTarget,
+      cumulativeStopRate: pStop,
+      cumulativeNeitherRate: Math.max(0, 1 - (pTarget + pStop))
     });
   }
 
@@ -65,6 +76,7 @@ export function computeTimeToEventProfile(
     sampleSize,
     medianBarsToTouch: calculatePercentile(touchBars, 0.5),
     medianBarsToTarget: calculatePercentile(targetBars, 0.5),
+    medianBarsToStop: calculatePercentile(stopBars, 0.5),
     survivalCurve
   };
 }

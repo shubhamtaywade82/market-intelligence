@@ -20,6 +20,7 @@ describe('Harmonic Patterns Engine', () => {
     const harmonics = detectHarmonicPatterns(swings, { symbol: 'BTCUSDT', timeframe: '1h' });
     expect(harmonics).toHaveLength(1);
     const h = harmonics[0]!;
+    expect(h.type).toBe('harmonic_pattern');
     expect(h.harmonicType).toBe('gartley');
     expect(h.direction).toBe('bullish');
     expect(h.prz.top.toNumber()).toBeGreaterThan(121.4);
