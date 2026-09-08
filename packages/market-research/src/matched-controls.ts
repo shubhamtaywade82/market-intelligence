@@ -4,6 +4,9 @@ import type { DirectionalOutcome, OutcomeConfig } from './types.js';
 import { evaluateGenericOutcome, DEFAULT_OUTCOME_CONFIG } from './outcome-evaluators.js';
 import { calculateCausalAtr } from './study-runner.js';
 
+import { estimateIndependentTrendRegime } from './context-features.js';
+import { getActiveSessions } from '@nemesis-oss/market-events';
+
 export interface MatchedControlObservation {
   readonly matchedEventId: string;
   readonly controlOriginIndex: number;
@@ -15,36 +18,46 @@ export interface MatchedControlObservation {
 export interface MatchOptions {
   readonly searchRadiusBars?: number;
   readonly maxAtrDeviationRatio?: number;
+  readonly matchTrendRegime?: boolean;
+  readonly matchSession?: boolean;
+}
+
+export interface MatchedControlResultSet extends Array<MatchedControlObservation> {
+  readonly matchRatio: number;
+  readonly matchedCount: number;
+  readonly totalEvents: number;
 }
 
 /**
  * Finds eligible non-event control candle indices for a given event,
- * matching on timeframe, direction, volatility bucket, and temporal proximity.
+ * matching on timeframe, direction, volatility bucket, temporal proximity,
+ * and optionally stratifying by trend regime and trading session.
  */
 export function findMatchedControlIndex(
   event: BaseEvent,
   candles: readonly Candle[],
-  eventIndices: ReadonlySet<number>,
+  unavailableIndices: ReadonlySet<number>,
   options: MatchOptions = {}
 ): number | null {
   const radius = options.searchRadiusBars ?? 50;
   const maxDev = options.maxAtrDeviationRatio ?? 0.30;
   const eventAtr = calculateCausalAtr(candles, event.originIndex);
+  const evTrend = options.matchTrendRegime ? estimateIndependentTrendRegime(candles, event.originIndex) : null;
+  const evSess = options.matchSession ? getActiveSessions(candles[event.originIndex]!.timestamp)[0] : null;
 
   const start = Math.max(0, event.originIndex - radius);
   const end = Math.min(candles.length - 1, event.originIndex + radius);
-
   let bestIdx: number | null = null;
   let smallestDiff = new Decimal(Infinity);
 
   for (let i = start; i <= end; i++) {
-    // Avoid candles that fired the event or immediate neighbors
-    if (eventIndices.has(i) || Math.abs(i - event.originIndex) < 2) continue;
+    if (unavailableIndices.has(i) || Math.abs(i - event.originIndex) < 2) continue;
+    if (evTrend !== null && estimateIndependentTrendRegime(candles, i) !== evTrend) continue;
+    if (evSess !== null && getActiveSessions(candles[i]!.timestamp)[0] !== evSess) continue;
 
     const candAtr = calculateCausalAtr(candles, i);
     const diff = candAtr.minus(eventAtr).abs();
     const ratio = diff.dividedBy(eventAtr.isZero() ? new Decimal(1) : eventAtr);
-
     if (ratio.lte(maxDev) && diff.lt(smallestDiff)) {
       smallestDiff = diff;
       bestIdx = i;
@@ -56,41 +69,50 @@ export function findMatchedControlIndex(
 
 /**
  * Generates direction-aware, volatility-matched control observations for an event population.
+ * Strictly enforces 1:1 matching without replacement and rejects contaminated fallback neighbors.
  */
 export function generateMatchedControls(
   events: readonly BaseEvent[],
   candles: readonly Candle[],
   config: OutcomeConfig = DEFAULT_OUTCOME_CONFIG,
   options: MatchOptions = {}
-): MatchedControlObservation[] {
-  const eventIndices = new Set(events.map(e => e.originIndex));
+): MatchedControlResultSet {
+  const unavailableIndices = new Set(events.map(e => e.originIndex));
   const controls: MatchedControlObservation[] = [];
 
   for (const ev of events) {
-    const matchedIdx = findMatchedControlIndex(ev, candles, eventIndices, options);
-    const fallbackIdx = Math.max(0, Math.min(candles.length - 1, ev.originIndex > 0 ? ev.originIndex - 1 : 0));
-    const originIdx = matchedIdx ?? fallbackIdx;
-    const causalAtr = calculateCausalAtr(candles, originIdx);
+    const matchedIdx = findMatchedControlIndex(ev, candles, unavailableIndices, options);
+    // Discard unmatched events rather than contaminating control with event impulse
+    if (matchedIdx === null) continue;
+
+    // Enforce 1:1 matching without replacement to prevent pseudo-replication
+    unavailableIndices.add(matchedIdx);
+    const causalAtr = calculateCausalAtr(candles, matchedIdx);
 
     const controlPseudoEvent: BaseEvent = {
       id: `ctrl-${ev.id}`,
       type: 'control',
       symbol: ev.symbol,
       timeframe: ev.timeframe,
-      detectedAt: candles[originIdx]?.timestamp ?? 0,
-      originIndex: originIdx,
+      detectedAt: candles[matchedIdx]?.timestamp ?? 0,
+      originIndex: matchedIdx,
       direction: ev.direction // Exact direction symmetry!
     };
 
     const outcome = evaluateGenericOutcome(controlPseudoEvent, candles, causalAtr, config);
     controls.push({
       matchedEventId: ev.id,
-      controlOriginIndex: originIdx,
+      controlOriginIndex: matchedIdx,
       direction: ev.direction,
       causalAtr,
       outcome
     });
   }
 
-  return controls;
+  const matchRatio = events.length > 0 ? controls.length / events.length : 0;
+  return Object.assign(controls, {
+    matchRatio,
+    matchedCount: controls.length,
+    totalEvents: events.length
+  });
 }

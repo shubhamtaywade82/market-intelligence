@@ -1,6 +1,12 @@
 import { Decimal } from 'decimal.js';
 import type { Candle, Timeframe } from '@nemesis-oss/market-events';
 import { calculateCausalAtr } from './study-runner.js';
+import type { HtfRegimeSnapshot } from './types.js';
+
+export { HtfRegimeSnapshot };
+
+export type HtfCandlesMap = Readonly<Partial<Record<Timeframe, readonly Candle[]>>>;
+export type MultiTimeframeSnapshot = Readonly<Partial<Record<Timeframe, HtfRegimeSnapshot>>>;
 
 export function timeframeToMs(tf: Timeframe): number {
   switch (tf) {
@@ -12,15 +18,6 @@ export function timeframeToMs(tf: Timeframe): number {
     case '1d': return 24 * 60 * 60 * 1000;
     default: return 15 * 60 * 1000;
   }
-}
-
-export interface HtfRegimeSnapshot {
-  readonly timeframe: Timeframe;
-  readonly causalCandleCount: number;
-  readonly lastCompletedTimestamp: number;
-  readonly causalAtr: Decimal;
-  readonly trend: 'bullish' | 'bearish' | 'sideways';
-  readonly lastClose: Decimal;
 }
 
 /**
@@ -65,3 +62,21 @@ export function extractCausalHtfContext(
     lastClose: last.close
   };
 }
+
+/**
+ * Extracts causal multi-timeframe snapshots across multiple higher timeframes.
+ */
+export function extractMultiTimeframeSnapshot(
+  htfCandlesMap: HtfCandlesMap,
+  eventTimestamp: number
+): MultiTimeframeSnapshot {
+  const result: Partial<Record<Timeframe, HtfRegimeSnapshot>> = {};
+  for (const [tf, candles] of Object.entries(htfCandlesMap) as [Timeframe, readonly Candle[] | undefined][]) {
+    if (candles && candles.length >= 2) {
+      const snap = extractCausalHtfContext(candles, eventTimestamp, tf);
+      if (snap) result[tf] = snap;
+    }
+  }
+  return result;
+}
+

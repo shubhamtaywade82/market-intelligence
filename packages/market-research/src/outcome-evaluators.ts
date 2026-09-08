@@ -16,27 +16,116 @@ import type {
   EventOutcome,
   ZoneOutcome
 } from './types.js';
-import { evaluateGenericOutcome, DEFAULT_OUTCOME_CONFIG } from './generic-outcomes.js';
+import { evaluateGenericOutcome, DEFAULT_OUTCOME_CONFIG, resolveCollision } from './generic-outcomes.js';
 
 export { evaluateGenericOutcome, DEFAULT_OUTCOME_CONFIG };
 
-function computeOutcomeRMultiples(
-  maxFav: Decimal,
-  maxAdv: Decimal,
-  risk: Decimal,
-  causalAtr: Decimal
+interface ZoneTrajectoryResult {
+  readonly mfe: Decimal;
+  readonly mae: Decimal;
+  readonly maxPenetration: Decimal;
+  readonly firstTouchBars: number | null;
+  readonly isInvalidated: boolean;
+  readonly firstHit: BaseOutcome['firstHit'];
+  readonly timeToFirstHitBars: number;
+  readonly isAmbiguous: boolean;
+}
+
+function checkZoneTouch(
+  c: Candle,
+  event: FvgEvent | OrderBlockEvent,
+  state: { firstTouchBars: number | null; maxPen: Decimal; isInvalidated: boolean },
+  offset: number
 ) {
-  const mfeAtr = causalAtr.gt(0) ? maxFav.dividedBy(causalAtr) : new Decimal(0);
-  const maeAtr = causalAtr.gt(0) ? maxAdv.dividedBy(causalAtr) : new Decimal(0);
-  const hit2R = maxFav.gte(risk.times(2));
+  const isBull = event.direction === 'bullish';
+  if (state.firstTouchBars === null && (isBull ? c.low.lte(event.top) : c.high.gte(event.bottom))) {
+    state.firstTouchBars = offset;
+  }
+  // Halt penetration tracking once zone is invalidated
+  if (state.firstTouchBars !== null && !state.isInvalidated) {
+    const pen = isBull ? event.top.minus(c.low) : c.high.minus(event.bottom);
+    if (pen.gt(state.maxPen)) state.maxPen = pen;
+    if (isBull ? c.close.lt(event.bottom) : c.close.gt(event.top)) state.isInvalidated = true;
+  }
+}
+
+function evaluateZoneTrajectory(
+  event: FvgEvent | OrderBlockEvent,
+  candles: readonly Candle[],
+  causalAtr: Decimal,
+  config: OutcomeConfig
+): ZoneTrajectoryResult {
+  const isBull = event.direction === 'bullish';
+  const entry = isBull ? event.top : event.bottom;
+  const span = event.top.minus(event.bottom).abs();
+  const risk = span.gt(0) ? span : causalAtr;
+  const target = isBull ? entry.plus(risk.times(config.targetR)) : entry.minus(risk.times(config.targetR));
+  const stop = isBull ? (span.gt(0) ? event.bottom : entry.minus(risk)) : (span.gt(0) ? event.top : entry.plus(risk));
+
+  const state = { firstTouchBars: null as number | null, maxPen: new Decimal(0), isInvalidated: false };
+  let mfe = new Decimal(0);
+  let mae = new Decimal(0);
+  let firstHit: BaseOutcome['firstHit'] = 'horizon_expired';
+  let timeToHit = 0;
+  let isAmbiguous = false;
+
+  const horizon = Math.min(candles.length, event.originIndex + 1 + config.horizonCandles);
+  for (let i = event.originIndex + 1; i < horizon; i++) {
+    const c = candles[i]!;
+    checkZoneTouch(c, event, state, i - event.originIndex);
+    const fav = isBull ? c.high.minus(entry) : entry.minus(c.low);
+    if (fav.gt(mfe)) mfe = fav;
+    const adv = isBull ? entry.minus(c.low) : c.high.minus(entry);
+    if (adv.gt(mae)) mae = adv;
+
+    const hitTarget = isBull ? c.high.gte(target) : c.low.lte(target);
+    const hitStop = isBull ? c.low.lte(stop) : c.high.gte(stop);
+    if (hitTarget && hitStop) {
+      firstHit = resolveCollision(config.ambiguityPolicy);
+      timeToHit = i - event.originIndex;
+      isAmbiguous = true;
+      break;
+    }
+    if (hitTarget) {
+      firstHit = 'target_first';
+      timeToHit = i - event.originIndex;
+      break;
+    }
+    if (hitStop) {
+      firstHit = 'stop_first';
+      timeToHit = i - event.originIndex;
+      break;
+    }
+  }
+
+  return { mfe, mae, maxPenetration: state.maxPen, firstTouchBars: state.firstTouchBars, isInvalidated: state.isInvalidated, firstHit, timeToFirstHitBars: timeToHit, isAmbiguous };
+}
+
+function computeOutcomeStats(
+  traj: ZoneTrajectoryResult,
+  risk: Decimal,
+  causalAtr: Decimal,
+  config: OutcomeConfig
+) {
+  const mfeAtr = causalAtr.gt(0) ? traj.mfe.dividedBy(causalAtr) : new Decimal(0);
+  const maeAtr = causalAtr.gt(0) ? traj.mae.dividedBy(causalAtr) : new Decimal(0);
+  const targetHitR = traj.firstHit === 'target_first'
+    ? new Decimal(config.targetR)
+    : traj.firstHit === 'stop_first'
+      ? new Decimal(-1)
+      : new Decimal(0);
+
   return {
     mfeAtr,
     maeAtr,
-    realizedR: hit2R ? new Decimal(2) : new Decimal(0),
-    firstHit: hit2R ? ('target_first' as const) : ('horizon_expired' as const),
-    hit1R: maxFav.gte(risk),
-    hit2R,
-    hit3R: maxFav.gte(risk.times(3))
+    targetHitR,
+    realizedR: targetHitR,
+    firstHit: traj.firstHit,
+    timeToFirstHitBars: traj.timeToFirstHitBars,
+    isAmbiguous: traj.isAmbiguous,
+    hit1R: traj.firstHit === 'target_first' || traj.mfe.gte(risk),
+    hit2R: traj.firstHit === 'target_first' || (traj.firstHit !== 'stop_first' && traj.mfe.gte(risk.times(2))),
+    hit3R: traj.firstHit !== 'stop_first' && traj.mfe.gte(risk.times(3))
   };
 }
 
@@ -46,47 +135,20 @@ export function evaluateFvgOutcome(
   causalAtr: Decimal,
   config: OutcomeConfig = DEFAULT_OUTCOME_CONFIG
 ): ZoneOutcome {
-  const isBull = event.direction === 'bullish';
-  const entryRef = isBull ? event.top : event.bottom;
+  const traj = evaluateZoneTrajectory(event, candles, causalAtr, config);
   const span = event.top.minus(event.bottom).abs();
   const risk = span.gt(0) ? span : causalAtr;
-
-  let firstTouchBars: number | null = null;
-  let maxFav = new Decimal(0);
-  let maxAdv = new Decimal(0);
-  let maxPenetration = new Decimal(0);
-  let isInvalidated = false;
-
-  const horizon = Math.min(candles.length, event.originIndex + 1 + config.horizonCandles);
-  for (let i = event.originIndex + 1; i < horizon; i++) {
-    const c = candles[i]!;
-    if ((isBull ? c.low.lte(event.top) : c.high.gte(event.bottom)) && firstTouchBars === null) {
-      firstTouchBars = i - event.originIndex;
-    }
-    if (firstTouchBars !== null) {
-      const pen = isBull ? event.top.minus(c.low) : c.high.minus(event.bottom);
-      if (pen.gt(maxPenetration)) maxPenetration = pen;
-      if (isBull ? c.close.lt(event.bottom) : c.close.gt(event.top)) isInvalidated = true;
-    }
-    const fav = isBull ? c.high.minus(entryRef) : entryRef.minus(c.low);
-    if (fav.gt(maxFav)) maxFav = fav;
-    const adv = isBull ? entryRef.minus(c.low) : c.high.minus(entryRef);
-    if (adv.gt(maxAdv)) maxAdv = adv;
-  }
-
-  const penRatio = span.isZero() ? new Decimal(0) : maxPenetration.dividedBy(span);
-  const rStats = computeOutcomeRMultiples(maxFav, maxAdv, risk, causalAtr);
+  const penRatio = span.isZero() ? new Decimal(0) : traj.maxPenetration.dividedBy(span);
+  const stats = computeOutcomeStats(traj, risk, causalAtr, config);
 
   return {
     eventId: event.id,
     horizonCandles: config.horizonCandles,
-    mfe: maxFav,
-    mae: maxAdv,
-    ...rStats,
-    timeToFirstHitBars: 0,
-    isAmbiguous: false,
-    firstTouchBars,
-    firstTouchIndex: firstTouchBars !== null ? event.originIndex + firstTouchBars : null,
+    mfe: traj.mfe,
+    mae: traj.mae,
+    ...stats,
+    firstTouchBars: traj.firstTouchBars,
+    firstTouchIndex: traj.firstTouchBars !== null ? event.originIndex + traj.firstTouchBars : null,
     fill25: penRatio.gte(0.25),
     fill50: penRatio.gte(0.50),
     fill75: penRatio.gte(0.75),
@@ -95,8 +157,8 @@ export function evaluateFvgOutcome(
     touch50: penRatio.gte(0.50),
     touch75: penRatio.gte(0.75),
     fullFill: penRatio.gte(1.0),
-    isMitigated: firstTouchBars !== null,
-    isInvalidated
+    isMitigated: traj.firstTouchBars !== null,
+    isInvalidated: traj.isInvalidated
   };
 }
 
@@ -106,47 +168,21 @@ export function evaluateOrderBlockOutcome(
   causalAtr: Decimal,
   config: OutcomeConfig = DEFAULT_OUTCOME_CONFIG
 ): OrderBlockOutcome {
-  const isBull = event.direction === 'bullish';
-  const entryRef = isBull ? event.top : event.bottom;
+  const traj = evaluateZoneTrajectory(event, candles, causalAtr, config);
   const span = event.top.minus(event.bottom).abs();
   const risk = span.gt(0) ? span : causalAtr;
+  const stats = computeOutcomeStats(traj, risk, causalAtr, config);
 
-  let firstTouchBars: number | null = null;
-  let maxFav = new Decimal(0);
-  let maxAdv = new Decimal(0);
-  let maxPen = new Decimal(0);
-  let isBreaker = false;
-
-  const horizon = Math.min(candles.length, event.originIndex + 1 + config.horizonCandles);
-  for (let i = event.originIndex + 1; i < horizon; i++) {
-    const c = candles[i]!;
-    if ((isBull ? c.low.lte(event.top) : c.high.gte(event.bottom)) && firstTouchBars === null) {
-      firstTouchBars = i - event.originIndex;
-    }
-    if (firstTouchBars !== null) {
-      const pen = isBull ? event.top.minus(c.low) : c.high.minus(event.bottom);
-      if (pen.gt(maxPen)) maxPen = pen;
-      if (isBull ? c.close.lt(event.bottom) : c.close.gt(event.top)) isBreaker = true;
-    }
-    const fav = isBull ? c.high.minus(entryRef) : entryRef.minus(c.low);
-    if (fav.gt(maxFav)) maxFav = fav;
-    const adv = isBull ? entryRef.minus(c.low) : c.high.minus(entryRef);
-    if (adv.gt(maxAdv)) maxAdv = adv;
-  }
-
-  const rStats = computeOutcomeRMultiples(maxFav, maxAdv, risk, causalAtr);
   return {
     eventId: event.id,
     horizonCandles: config.horizonCandles,
-    mfe: maxFav,
-    mae: maxAdv,
-    ...rStats,
-    timeToFirstHitBars: 0,
-    isAmbiguous: false,
-    firstTouchBars,
-    maxPenetrationRatio: span.isZero() ? new Decimal(0) : maxPen.dividedBy(span),
-    isMitigated: firstTouchBars !== null,
-    isBreaker
+    mfe: traj.mfe,
+    mae: traj.mae,
+    ...stats,
+    firstTouchBars: traj.firstTouchBars,
+    maxPenetrationRatio: span.isZero() ? new Decimal(0) : traj.maxPenetration.dividedBy(span),
+    isMitigated: traj.firstTouchBars !== null,
+    isBreaker: traj.isInvalidated
   };
 }
 

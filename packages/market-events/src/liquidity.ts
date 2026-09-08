@@ -4,6 +4,7 @@ import type {
   LiquidityPool,
   LiquidityPoolType,
   LiquiditySweepEvent,
+  LiquidityTargetType,
   SwingPoint,
   Timeframe
 } from './types.js';
@@ -15,87 +16,97 @@ export interface SweepOptions {
 }
 
 /**
- * Builds liquidity pools from swing points, identifying single levels, equal highs/lows, and clusters.
+ * Causal Liquidity Pool Manager: increments and updates pools strictly as swings are confirmed over time.
+ * Completely eliminates future lookahead bias in liquidity pool clustering.
+ */
+export class CausalLiquidityPoolManager {
+  private pools: LiquidityPool[] = [];
+  private readonly toleranceRatio: number;
+
+  constructor(toleranceRatio: number = 0.0015) {
+    this.toleranceRatio = toleranceRatio;
+  }
+
+  public onSwingConfirmed(swing: SwingPoint): void {
+    const isHigh = swing.type === 'high';
+    const targetType: LiquidityTargetType = isHigh ? 'bsl' : 'ssl';
+    const matching = this.pools.find(p =>
+      p.status === 'active' &&
+      p.targetType === targetType &&
+      p.price.minus(swing.price).abs().dividedBy(p.price).lte(this.toleranceRatio)
+    );
+
+    if (matching) {
+      const newTouch = matching.touchCount + 1;
+      const poolType: LiquidityPoolType = isHigh
+        ? (newTouch >= 3 ? 'cluster' : 'equal_highs')
+        : (newTouch >= 3 ? 'cluster' : 'equal_lows');
+      const updatedPrice = isHigh ? Decimal.max(matching.price, swing.price) : Decimal.min(matching.price, swing.price);
+      const idx = this.pools.indexOf(matching);
+      this.pools[idx] = {
+        ...matching,
+        price: updatedPrice,
+        poolType,
+        touchCount: newTouch,
+        strength: 'composite',
+        formationTime: swing.timestamp
+      };
+    } else {
+      const poolType: LiquidityPoolType = isHigh ? 'single_high' : 'single_low';
+      this.pools.push({
+        poolId: `pool-${targetType}-${swing.timestamp}-${poolType}`,
+        price: swing.price,
+        targetType,
+        poolType,
+        strength: swing.strength ?? 'minor',
+        firstObservedAt: swing.timestamp,
+        confirmedAtIndex: swing.confirmedAtIndex,
+        formationTime: swing.timestamp,
+        touchCount: 1,
+        source: 'swings',
+        status: 'active'
+      });
+    }
+  }
+
+  public getActivePools(): readonly LiquidityPool[] {
+    return this.pools.filter(p => p.status === 'active');
+  }
+
+  public markSwept(poolId: string, timestamp: number, index: number): void {
+    const idx = this.pools.findIndex(p => p.poolId === poolId);
+    if (idx >= 0) {
+      this.pools[idx] = {
+        ...this.pools[idx]!,
+        status: 'swept',
+        sweptAtTimestamp: timestamp,
+        sweptByIndex: index
+      };
+    }
+  }
+
+  public getAllPools(): readonly LiquidityPool[] {
+    return this.pools;
+  }
+}
+
+/**
+ * Builds liquidity pools causally from swings in historical confirmation order.
  */
 export function buildLiquidityPools(
   swings: readonly SwingPoint[],
   toleranceRatio: number = 0.0015
 ): LiquidityPool[] {
-  const pools: LiquidityPool[] = [];
-  const highSwings = swings.filter(s => s.type === 'high');
-  const lowSwings = swings.filter(s => s.type === 'low');
-
-  // Process Buy-Side Liquidity (BSL)
-  const usedHighIds = new Set<string>();
-  for (let i = 0; i < highSwings.length; i++) {
-    const s1 = highSwings[i]!;
-    if (usedHighIds.has(s1.id)) continue;
-
-    const cluster = [s1];
-    for (let j = i + 1; j < highSwings.length; j++) {
-      const s2 = highSwings[j]!;
-      if (usedHighIds.has(s2.id)) continue;
-      const diff = s1.price.minus(s2.price).abs();
-      if (diff.dividedBy(s1.price).lte(toleranceRatio)) {
-        cluster.push(s2);
-        usedHighIds.add(s2.id);
-      }
-    }
-
-    const poolType: LiquidityPoolType = cluster.length >= 3 ? 'cluster' : cluster.length === 2 ? 'equal_highs' : 'single_high';
-    const maxPrice = cluster.reduce((max, s) => Decimal.max(max, s.price), new Decimal(0));
-
-    pools.push({
-      poolId: `pool-bsl-${s1.timestamp}-${poolType}`,
-      price: maxPrice,
-      targetType: 'bsl',
-      poolType,
-      strength: cluster.length >= 2 ? 'composite' : (s1.strength ?? 'minor'),
-      formationTime: cluster[cluster.length - 1]!.timestamp,
-      touchCount: cluster.length,
-      source: 'swings',
-      status: 'active'
-    });
+  const manager = new CausalLiquidityPoolManager(toleranceRatio);
+  const sorted = [...swings].sort((a, b) => a.confirmedAtIndex - b.confirmedAtIndex);
+  for (const s of sorted) {
+    manager.onSwingConfirmed(s);
   }
-
-  // Process Sell-Side Liquidity (SSL)
-  const usedLowIds = new Set<string>();
-  for (let i = 0; i < lowSwings.length; i++) {
-    const s1 = lowSwings[i]!;
-    if (usedLowIds.has(s1.id)) continue;
-
-    const cluster = [s1];
-    for (let j = i + 1; j < lowSwings.length; j++) {
-      const s2 = lowSwings[j]!;
-      if (usedLowIds.has(s2.id)) continue;
-      const diff = s1.price.minus(s2.price).abs();
-      if (diff.dividedBy(s1.price).lte(toleranceRatio)) {
-        cluster.push(s2);
-        usedLowIds.add(s2.id);
-      }
-    }
-
-    const poolType: LiquidityPoolType = cluster.length >= 3 ? 'cluster' : cluster.length === 2 ? 'equal_lows' : 'single_low';
-    const minPrice = cluster.reduce((min, s) => Decimal.min(min, s.price), new Decimal(Infinity));
-
-    pools.push({
-      poolId: `pool-ssl-${s1.timestamp}-${poolType}`,
-      price: minPrice,
-      targetType: 'ssl',
-      poolType,
-      strength: cluster.length >= 2 ? 'composite' : (s1.strength ?? 'minor'),
-      formationTime: cluster[cluster.length - 1]!.timestamp,
-      touchCount: cluster.length,
-      source: 'swings',
-      status: 'active'
-    });
-  }
-
-  return pools;
+  return [...manager.getAllPools()];
 }
 
 /**
- * Detects liquidity sweeps against liquidity pools with deduplication to the deepest sweep.
+ * Detects liquidity sweeps against liquidity pools with incremental causal state.
  */
 export function detectLiquiditySweeps(
   candles: readonly Candle[],
@@ -103,14 +114,29 @@ export function detectLiquiditySweeps(
   options: SweepOptions
 ): LiquiditySweepEvent[] {
   const tolerance = options.equalLevelToleranceRatio ?? 0.0015;
-  const pools = buildLiquidityPools(swings, tolerance);
+  const manager = new CausalLiquidityPoolManager(tolerance);
   const sweeps: LiquiditySweepEvent[] = [];
+
+  const swingsByConfirmedIndex = new Map<number, SwingPoint[]>();
+  for (const s of swings) {
+    const list = swingsByConfirmedIndex.get(s.confirmedAtIndex) ?? [];
+    list.push(s);
+    swingsByConfirmedIndex.set(s.confirmedAtIndex, list);
+  }
 
   for (let i = 0; i < candles.length; i++) {
     const candle = candles[i]!;
-    // Only evaluate pools formed prior to or at this candle
-    const activePools = pools.filter(p => p.formationTime <= candle.timestamp);
 
+    // 1. Ingest swings confirmed at bar i
+    const newlyConfirmed = swingsByConfirmedIndex.get(i);
+    if (newlyConfirmed) {
+      for (const s of newlyConfirmed) {
+        manager.onSwingConfirmed(s);
+      }
+    }
+
+    // 2. Check sweeps against active pools
+    const activePools = manager.getActivePools();
     let deepestBsl: { pool: LiquidityPool; extreme: Decimal } | null = null;
     let deepestSsl: { pool: LiquidityPool; extreme: Decimal } | null = null;
 
@@ -131,6 +157,7 @@ export function detectLiquiditySweeps(
     }
 
     if (deepestBsl) {
+      manager.markSwept(deepestBsl.pool.poolId, candle.timestamp, i);
       sweeps.push({
         id: `${options.symbol}-${options.timeframe}-sweep-bsl-${candle.timestamp}`,
         type: 'liquidity_sweep',
@@ -150,6 +177,7 @@ export function detectLiquiditySweeps(
     }
 
     if (deepestSsl) {
+      manager.markSwept(deepestSsl.pool.poolId, candle.timestamp, i);
       sweeps.push({
         id: `${options.symbol}-${options.timeframe}-sweep-ssl-${candle.timestamp}`,
         type: 'liquidity_sweep',

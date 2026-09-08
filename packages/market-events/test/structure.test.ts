@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Decimal } from 'decimal.js';
 import { detectSwings, detectMultiScaleSwings } from '../src/swings.js';
-import { detectStructureBreaks } from '../src/structure.js';
+import { detectStructureBreaks, detectBos, detectChoch, detectMss } from '../src/structure.js';
 import { detectOrderBlocks } from '../src/order-block.js';
 import { detectLiquiditySweeps, buildLiquidityPools } from '../src/liquidity.js';
 import type { Candle, SwingPoint } from '../src/types.js';
@@ -99,4 +99,29 @@ describe('Deterministic Structure Engine', () => {
     expect(sweep.poolId).toBeDefined();
     expect(sweep.penetrationTicks?.toNumber()).toBe(2);
   });
+
+  it('discriminates BOS, CHoCH, and MSS with dedicated specialized detectors and versioning', () => {
+    const candles: Candle[] = [
+      makeCandle(1000, 100, 105, 98, 102),
+      makeCandle(2000, 102, 110, 101, 109), // Swing High at 110 (idx 1)
+      makeCandle(3000, 109, 106, 95, 96),   // Swing Low at 95 (idx 2)
+      makeCandle(4000, 96, 108, 96, 107),   // confirmed swing high (idx 3)
+      makeCandle(5000, 107, 115, 106, 114)  // breaks 110 with close 114 (idx 4)
+    ];
+
+    const swings = detectSwings(candles, { leftBars: 1, rightBars: 1 });
+    const opts = { symbol: 'BTCUSDT', timeframe: '15m' as const };
+
+    const allBreaks = detectStructureBreaks(candles, swings, opts);
+    expect(allBreaks[0]?.version).toBe('1.0.0');
+
+    const bosBreaks = detectBos(candles, swings, opts);
+    const chochBreaks = detectChoch(candles, swings, opts);
+    const mssBreaks = detectMss(candles, swings, opts);
+
+    expect(bosBreaks.every(b => b.type === 'bos')).toBe(true);
+    expect(chochBreaks.every(b => b.type === 'choch')).toBe(true);
+    expect(mssBreaks.every(b => b.type === 'mss')).toBe(true);
+  });
 });
+

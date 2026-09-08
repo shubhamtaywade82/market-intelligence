@@ -89,6 +89,7 @@ export function evaluateFvgOutcome(
     mae: maxAdv,
     mfeAtr: options.atr.gt(0) ? maxFav.dividedBy(options.atr) : new Decimal(0),
     maeAtr: options.atr.gt(0) ? maxAdv.dividedBy(options.atr) : new Decimal(0),
+    targetHitR: hit2R ? new Decimal(2) : new Decimal(0),
     realizedR: hit2R ? new Decimal(2) : new Decimal(0),
     firstHit: hit2R ? 'target_first' : 'horizon_expired',
     timeToFirstHitBars: 0,

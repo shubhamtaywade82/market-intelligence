@@ -3,10 +3,10 @@ import type { BaseEvent, Timeframe } from '@nemesis-oss/market-events';
 
 export interface Provenance {
   readonly datasetId: string;
-  readonly datasetHash?: string | undefined;
+  readonly datasetHash: string;
   readonly detectorId: string;
   readonly detectorVersion: string;
-  readonly detectorConfigHash?: string | undefined;
+  readonly detectorConfigHash: string;
   readonly outcomeVersion: string;
 }
 
@@ -32,6 +32,8 @@ export interface BaseOutcome {
   readonly mae: Decimal;
   readonly mfeAtr: Decimal;
   readonly maeAtr: Decimal;
+  readonly targetHitR: Decimal;
+  /** @deprecated Use targetHitR instead */
   readonly realizedR: Decimal;
   readonly firstHit: FirstHitResult;
   readonly timeToFirstHitBars: number;
@@ -132,15 +134,86 @@ export interface ComponentStudyResult {
   } | undefined;
 }
 
+export interface ResearchPopulationInfo {
+  readonly symbol: string;
+  readonly timeframe: Timeframe;
+  readonly candleCount: number;
+}
+
+export interface ResearchSampleInfo {
+  readonly eventType: string;
+  readonly sampleSize: number;
+  readonly effectiveSampleSize: number;
+  readonly clusterCount: number;
+}
+
+export interface ResearchControlsInfo {
+  readonly sampleSize: number;
+  readonly matchedHitRateR2: number;
+  readonly matchRatio: number;
+}
+
+export interface ResearchDescriptiveStats {
+  readonly hitRates: { readonly r1: number; readonly r2: number; readonly r3: number };
+  readonly medianMfeAtr: number;
+  readonly medianMaeAtr: number;
+  readonly retestProbability: number | null;
+  readonly fill25Rate: number | null;
+  readonly fill50Rate: number | null;
+  readonly fullFillRate: number | null;
+}
+
+export interface ResearchEffectStats {
+  readonly uplift: number;
+  readonly relativeUplift?: number | undefined;
+  readonly oddsRatio?: number | undefined;
+}
+
+export interface ResearchUncertaintyStats {
+  readonly confidenceIntervalR2?: { readonly lower: number; readonly upper: number } | undefined;
+  readonly medianMfeAtrCi?: BootstrapConfidenceInterval | undefined;
+}
+
+export interface ResearchDependenceStats {
+  readonly clusterCount: number;
+  readonly effectiveSampleSize: number;
+  readonly pValueEstimate: number;
+  readonly isStatisticallySignificant: boolean;
+}
+
+export interface ResearchResult {
+  readonly population: ResearchPopulationInfo;
+  readonly sample: ResearchSampleInfo;
+  readonly controls: ResearchControlsInfo;
+  readonly descriptive: ResearchDescriptiveStats;
+  readonly effect: ResearchEffectStats;
+  readonly uncertainty: ResearchUncertaintyStats;
+  readonly dependence: ResearchDependenceStats;
+  readonly provenance: Provenance;
+}
+
+export type MarketSession = 'asia' | 'london' | 'new_york' | 'off_hours';
+
+export interface HtfRegimeSnapshot {
+  readonly timeframe: Timeframe;
+  readonly causalCandleCount: number;
+  readonly lastCompletedTimestamp: number;
+  readonly causalAtr: Decimal;
+  readonly trend: 'bullish' | 'bearish' | 'sideways';
+  readonly lastClose: Decimal;
+}
+
 export interface ContextSnapshot {
   readonly atr: Decimal;
   readonly trendRegime: 'bullish' | 'bearish' | 'range';
   readonly volatilityRegime: 'low' | 'normal' | 'high';
+  readonly session?: MarketSession | undefined;
+  readonly htfContext?: Readonly<Partial<Record<Timeframe, HtfRegimeSnapshot>>> | undefined;
 }
 
 export interface ResearchObservation {
   readonly event: BaseEvent;
   readonly context: ContextSnapshot;
   readonly outcome: EventOutcome;
-  readonly provenance?: Provenance | undefined;
+  readonly provenance: Provenance;
 }

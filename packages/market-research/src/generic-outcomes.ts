@@ -17,25 +17,35 @@ interface TrajectoryResult {
   readonly isAmbiguous: boolean;
 }
 
-function resolveCollision(policy: OutcomeConfig['ambiguityPolicy']): BaseOutcome['firstHit'] {
+export function resolveCollision(policy: OutcomeConfig['ambiguityPolicy']): BaseOutcome['firstHit'] {
   if (policy === 'optimistic') return 'target_first';
   if (policy === 'pessimistic') return 'stop_first';
   return 'simultaneous_collision';
 }
 
+export interface TrajectoryParams {
+  readonly entry: Decimal;
+  readonly direction: 'bullish' | 'bearish';
+  readonly atr: Decimal;
+  readonly config: OutcomeConfig;
+  readonly startOffset?: number | undefined;
+}
+
+function checkBarHit(c: Candle, isBull: boolean, target: Decimal, stop: Decimal) {
+  return {
+    hitTarget: isBull ? c.high.gte(target) : c.low.lte(target),
+    hitStop: isBull ? c.low.lte(stop) : c.high.gte(stop)
+  };
+}
+
 export function evaluateTrajectory(
   candles: readonly Candle[],
-  entry: Decimal,
-  direction: 'bullish' | 'bearish',
-  atr: Decimal,
-  config: OutcomeConfig,
-  startOffset: number = 1
+  params: TrajectoryParams
 ): TrajectoryResult {
+  const { entry, direction, atr, config, startOffset = 1 } = params;
   const isBull = direction === 'bullish';
-  const targetDist = atr.times(config.targetR);
-  const stopDist = atr.times(config.stopAtrMultiplier);
-  const targetPrice = isBull ? entry.plus(targetDist) : entry.minus(targetDist);
-  const stopPrice = isBull ? entry.minus(stopDist) : entry.plus(stopDist);
+  const target = isBull ? entry.plus(atr.times(config.targetR)) : entry.minus(atr.times(config.targetR));
+  const stop = isBull ? entry.minus(atr.times(config.stopAtrMultiplier)) : entry.plus(atr.times(config.stopAtrMultiplier));
 
   let mfe = new Decimal(0);
   let mae = new Decimal(0);
@@ -51,21 +61,22 @@ export function evaluateTrajectory(
     if (fav.gt(mfe)) mfe = fav;
     if (adv.gt(mae)) mae = adv;
 
-    if (firstHit === 'horizon_expired') {
-      const hitTarget = isBull ? c.high.gte(targetPrice) : c.low.lte(targetPrice);
-      const hitStop = isBull ? c.low.lte(stopPrice) : c.high.gte(stopPrice);
-
-      if (hitTarget && hitStop) {
-        firstHit = resolveCollision(config.ambiguityPolicy);
-        timeToHit = i - startOffset + 1;
-        isAmbiguous = true;
-      } else if (hitTarget) {
-        firstHit = 'target_first';
-        timeToHit = i - startOffset + 1;
-      } else if (hitStop) {
-        firstHit = 'stop_first';
-        timeToHit = i - startOffset + 1;
-      }
+    const { hitTarget, hitStop } = checkBarHit(c, isBull, target, stop);
+    if (hitTarget && hitStop) {
+      firstHit = resolveCollision(config.ambiguityPolicy);
+      timeToHit = i - startOffset + 1;
+      isAmbiguous = true;
+      break;
+    }
+    if (hitTarget) {
+      firstHit = 'target_first';
+      timeToHit = i - startOffset + 1;
+      break;
+    }
+    if (hitStop) {
+      firstHit = 'stop_first';
+      timeToHit = i - startOffset + 1;
+      break;
     }
   }
 
@@ -80,11 +91,21 @@ export function evaluateGenericOutcome(
 ): DirectionalOutcome {
   const c = candles[event.originIndex];
   const entry = c ? c.close : new Decimal(0);
-  const traj = evaluateTrajectory(candles, entry, event.direction, causalAtr, config, event.originIndex + 1);
+  const traj = evaluateTrajectory(candles, {
+    entry,
+    direction: event.direction,
+    atr: causalAtr,
+    config,
+    startOffset: event.originIndex + 1
+  });
 
   const mfeAtr = causalAtr.isZero() ? new Decimal(0) : traj.mfe.dividedBy(causalAtr);
   const maeAtr = causalAtr.isZero() ? new Decimal(0) : traj.mae.dividedBy(causalAtr);
-  const realizedR = traj.firstHit === 'target_first' ? new Decimal(config.targetR) : traj.firstHit === 'stop_first' ? new Decimal(-1) : new Decimal(0);
+  const targetHitR = traj.firstHit === 'target_first'
+    ? new Decimal(config.targetR)
+    : traj.firstHit === 'stop_first'
+      ? new Decimal(-config.stopAtrMultiplier)
+      : new Decimal(0);
 
   return {
     eventId: event.id,
@@ -93,12 +114,13 @@ export function evaluateGenericOutcome(
     mae: traj.mae,
     mfeAtr,
     maeAtr,
-    realizedR,
+    targetHitR,
+    realizedR: targetHitR,
     firstHit: traj.firstHit,
     timeToFirstHitBars: traj.timeToFirstHitBars,
     isAmbiguous: traj.isAmbiguous,
-    hit1R: mfeAtr.gte(1),
-    hit2R: mfeAtr.gte(2),
-    hit3R: mfeAtr.gte(3)
+    hit1R: traj.firstHit === 'target_first' || mfeAtr.gte(1),
+    hit2R: traj.firstHit === 'target_first' || (traj.firstHit !== 'stop_first' && mfeAtr.gte(2)),
+    hit3R: traj.firstHit !== 'stop_first' && mfeAtr.gte(3)
   };
 }

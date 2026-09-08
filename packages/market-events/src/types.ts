@@ -13,9 +13,28 @@ export interface Candle {
 
 export type EventDirection = 'bullish' | 'bearish';
 
+export type MarketEventType =
+  | 'fvg'
+  | 'ifvg'
+  | 'order_block'
+  | 'breaker_block'
+  | 'bos'
+  | 'choch'
+  | 'mss'
+  | 'liquidity_sweep'
+  | 'displacement'
+  | 'vsa'
+  | 'derivatives'
+  | 'wyckoff'
+  | 'chart_pattern'
+  | 'harmonic_pattern'
+  | 'control'
+  | (string & {});
+
 export interface BaseEvent {
   readonly id: string;
-  readonly type: string;
+  readonly type: MarketEventType;
+  readonly version?: string | undefined;
   readonly symbol: string;
   readonly timeframe: Timeframe;
   readonly detectedAt: number;
@@ -95,6 +114,8 @@ export interface LiquidityPool {
   readonly targetType: LiquidityTargetType;
   readonly poolType: LiquidityPoolType;
   readonly strength: SwingStrength | 'composite';
+  readonly firstObservedAt: number;
+  readonly confirmedAtIndex: number;
   readonly formationTime: number;
   readonly touchCount: number;
   readonly source: string;
@@ -215,3 +236,18 @@ export interface HarmonicPatternEvent extends BaseEvent {
   readonly dPrice: Decimal;
   readonly prz: { readonly top: Decimal; readonly bottom: Decimal };
 }
+
+export type MarketEvent =
+  | FvgEvent
+  | InvertedFvgEvent
+  | OrderBlockEvent
+  | BreakerBlockEvent
+  | StructureBreakEvent
+  | LiquiditySweepEvent
+  | DisplacementEvent
+  | VsaEvent
+  | DerivativesEvent
+  | WyckoffEvent
+  | ChartPatternEvent
+  | HarmonicPatternEvent;
+

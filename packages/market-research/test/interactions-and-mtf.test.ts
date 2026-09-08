@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { Decimal } from 'decimal.js';
 import type { Candle, BaseEvent } from '@nemesis-oss/market-events';
-import { getCausalHtfCandles, extractCausalHtfContext } from '../src/multi-timeframe.js';
+import { getCausalHtfCandles, extractCausalHtfContext, extractMultiTimeframeSnapshot } from '../src/multi-timeframe.js';
 import { analyzeEventPairInteraction } from '../src/interactions.js';
-import { computeTimeToEventProfile } from '../src/time-to-event.js';
+import { computeTimeToEventProfile, computeOutcomeDistribution } from '../src/time-to-event.js';
 import type { BaseOutcome, FvgOutcome } from '../src/types.js';
 
 function makeCandle(ts: number, close: number): Candle {
@@ -117,4 +117,57 @@ describe('Time-to-Event Survival Analysis', () => {
     // At bar 5: both have been touched (0 survival)
     expect(profile.survivalCurve[4]!.survivalRate).toBe(0.0);
   });
+
+  it('computes non-parametric empirical excursion quantiles and threshold distributions', () => {
+    const outcomes: BaseOutcome[] = [
+      {
+        eventId: '1', horizonCandles: 10, mfe: new Decimal(10), mae: new Decimal(2),
+        mfeAtr: new Decimal(1.0), maeAtr: new Decimal(0.2), realizedR: new Decimal(1),
+        targetHitR: new Decimal(1), firstHit: 'target_first', timeToFirstHitBars: 2,
+        isAmbiguous: false, hit1R: true, hit2R: false, hit3R: false
+      },
+      {
+        eventId: '2', horizonCandles: 10, mfe: new Decimal(20), mae: new Decimal(4),
+        mfeAtr: new Decimal(2.5), maeAtr: new Decimal(0.8), realizedR: new Decimal(2),
+        targetHitR: new Decimal(2), firstHit: 'target_first', timeToFirstHitBars: 4,
+        isAmbiguous: false, hit1R: true, hit2R: true, hit3R: false
+      },
+      {
+        eventId: '3', horizonCandles: 10, mfe: new Decimal(35), mae: new Decimal(1),
+        mfeAtr: new Decimal(4.0), maeAtr: new Decimal(0.1), realizedR: new Decimal(3),
+        targetHitR: new Decimal(3), firstHit: 'target_first', timeToFirstHitBars: 5,
+        isAmbiguous: false, hit1R: true, hit2R: true, hit3R: true
+      }
+    ];
+
+    const dist = computeOutcomeDistribution(outcomes, [1.0, 2.0, 3.0]);
+    expect(dist.sampleSize).toBe(3);
+    expect(dist.mfeAtrQuantiles).toBeDefined();
+    expect(dist.mfeAtrQuantiles!.p50).toBe(2.5); // median of [1.0, 2.5, 4.0]
+    expect(dist.mfeDistribution).toHaveLength(3);
+    expect(dist.mfeDistribution[0]!.thresholdAtr).toBe(1.0);
+    expect(dist.mfeDistribution[0]!.probabilityExceeding).toBe(1.0); // 3 of 3 >= 1.0
+    expect(dist.mfeDistribution[1]!.thresholdAtr).toBe(2.0);
+    expect(dist.mfeDistribution[1]!.probabilityExceeding).toBeCloseTo(2 / 3, 2); // 2 of 3 >= 2.0
+  });
+
+  it('extractMultiTimeframeSnapshot aggregates causal snapshots across timeframes', () => {
+    const htf1h: Candle[] = [];
+    const htf4h: Candle[] = [];
+    for (let i = 0; i < 10; i++) {
+      htf1h.push(makeCandle(i * 3600000, 100 + i * 5));
+      htf4h.push(makeCandle(i * 14400000, 100 + i * 20));
+    }
+
+    const multiSnap = extractMultiTimeframeSnapshot(
+      { '1h': htf1h, '4h': htf4h },
+      8 * 3600000
+    );
+
+    expect(multiSnap['1h']).toBeDefined();
+    expect(multiSnap['1h']!.trend).toBe('bullish');
+    expect(multiSnap['4h']).toBeDefined();
+    expect(multiSnap['4h']!.timeframe).toBe('4h');
+  });
 });
+

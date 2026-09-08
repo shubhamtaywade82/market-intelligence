@@ -18,19 +18,34 @@ import {
   compareAgainstBaseline
 } from './statistical-significance.js';
 import { clusterEventsIntoEpisodes } from './episode-clustering.js';
+import { extractContextSnapshot } from './context-features.js';
 import type {
   ComponentStudyResult,
   DirectionalOutcome,
   EventOutcome,
   FvgOutcome,
-  OutcomeConfig
+  OutcomeConfig,
+  Provenance,
+  ResearchObservation,
+  ResearchResult
 } from './types.js';
+import type { HtfCandlesMap } from './multi-timeframe.js';
 
 export interface RunStudyOptions {
   readonly symbol: string;
   readonly timeframe: Timeframe;
   readonly horizonCandles?: number | undefined;
   readonly ambiguityPolicy?: 'pessimistic' | 'optimistic' | 'ambiguous' | undefined;
+  readonly htfCandlesMap?: HtfCandlesMap | undefined;
+}
+
+export function computeDeterministicHash(input: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, '0');
 }
 
 export function calculateCausalAtr(candles: readonly Candle[], index: number, period: number = 14): Decimal {
@@ -66,52 +81,66 @@ function calculateMedian(values: number[]): number {
   return sorted.length % 2 === 0 ? (sorted[mid - 1]! + sorted[mid]!) / 2 : sorted[mid]!;
 }
 
-export function evaluateBaselineControl(
+export function createResearchObservations(
+  events: readonly BaseEvent[],
   candles: readonly Candle[],
-  horizon: number
-): { hitsR2: number; total: number } {
-  let hitsR2 = 0;
-  let total = 0;
+  config: OutcomeConfig,
+  htfCandlesMap?: HtfCandlesMap | undefined
+): readonly ResearchObservation[] {
+  const datasetId = events[0] ? `${events[0].symbol}-${events[0].timeframe}` : 'unknown';
+  const datasetHash = computeDeterministicHash(`${datasetId}-${candles.length}-${candles[0]?.timestamp ?? 0}`);
+  const configHash = computeDeterministicHash(JSON.stringify(config));
 
-  for (let i = 14; i < candles.length - horizon; i += 5) {
-    const c = candles[i]!;
-    const next = candles[Math.min(candles.length - 1, i + horizon)]!;
-    const delta = next.close.minus(c.close);
-    if (delta.abs().gte(c.high.minus(c.low).times(2))) hitsR2++;
-    total++;
-  }
+  return events.map(ev => {
+    const context = extractContextSnapshot(candles, ev.originIndex, htfCandlesMap);
+    const outcome = evaluateEventOutcome(ev, candles, context.atr, config);
+    const provenance: Provenance = {
+      datasetId,
+      datasetHash,
+      detectorId: ev.type,
+      detectorVersion: '1.0.0',
+      detectorConfigHash: configHash,
+      outcomeVersion: '1.0.0'
+    };
 
-  return { hitsR2, total: Math.max(1, total) };
+    return { event: ev, context, outcome, provenance };
+  });
+}
+
+interface ComponentMeta {
+  readonly symbol: string;
+  readonly timeframe: Timeframe;
+  readonly eventType: string;
+}
+
+interface ComponentEvalOptions extends ComponentMeta {
+  readonly config: OutcomeConfig;
+  readonly htfCandlesMap?: HtfCandlesMap | undefined;
 }
 
 function evaluateStudyComponent(
-  symbol: string,
-  timeframe: Timeframe,
-  eventType: string,
+  opts: ComponentEvalOptions,
   events: readonly BaseEvent[],
-  candles: readonly Candle[],
-  config: OutcomeConfig
-): ComponentStudyResult {
-  const outcomes = events.map(ev => {
-    const atr = calculateCausalAtr(candles, ev.originIndex);
-    return evaluateEventOutcome(ev, candles, atr, config);
-  });
+  candles: readonly Candle[]
+): { readonly result: ComponentStudyResult; readonly observations: readonly ResearchObservation[] } {
+  const observations = createResearchObservations(events, candles, opts.config, opts.htfCandlesMap);
+  const outcomes = observations.map(o => o.outcome);
 
-  const controls = generateMatchedControls(events, candles, config);
+  const controls = generateMatchedControls(events, candles, opts.config, { matchTrendRegime: true });
   const episodes = clusterEventsIntoEpisodes(events, { maxCandleGap: 3 });
   const clusterSizes = episodes.map(ep => ep.eventsCount);
 
-  return buildStudyResult(symbol, timeframe, eventType, outcomes, controls.map(c => c.outcome), clusterSizes);
+  const result = buildStudyResult(opts, outcomes, controls.map(c => c.outcome), clusterSizes);
+  return { result, observations };
 }
 
 function buildStudyResult(
-  symbol: string,
-  timeframe: Timeframe,
-  eventType: string,
+  meta: ComponentMeta,
   outcomes: readonly EventOutcome[],
   controlOutcomes: readonly DirectionalOutcome[],
   clusterSizes: readonly number[]
 ): ComponentStudyResult {
+  const { symbol, timeframe, eventType } = meta;
   const sampleSize = outcomes.length;
   if (sampleSize === 0) {
     return {
@@ -158,34 +187,82 @@ function buildStudyResult(
   };
 }
 
-export function runUniversalStudy(
+export interface ObservationStudyResult {
+  readonly observations: readonly ResearchObservation[];
+  readonly results: readonly ComponentStudyResult[];
+}
+
+export function runObservationStudy(
   candles: readonly Candle[],
   options: RunStudyOptions
-): ComponentStudyResult[] {
+): ObservationStudyResult {
   const config: OutcomeConfig = {
     ...DEFAULT_OUTCOME_CONFIG,
     horizonCandles: options.horizonCandles ?? 24,
     ambiguityPolicy: options.ambiguityPolicy ?? 'pessimistic'
   };
-  const { symbol, timeframe } = options;
+  const { symbol, timeframe, htfCandlesMap } = options;
 
   const fvgs = detectFvg(candles, { symbol, timeframe });
-  const fvgResult = evaluateStudyComponent(symbol, timeframe, 'fvg', fvgs, candles, config);
+  const fvgEval = evaluateStudyComponent({ symbol, timeframe, eventType: 'fvg', config, htfCandlesMap }, fvgs, candles);
 
   const swings = detectSwings(candles, { leftBars: 2, rightBars: 2 });
   const breaks = detectStructureBreaks(candles, swings, { symbol, timeframe });
-  const bosResult = evaluateStudyComponent(symbol, timeframe, 'bos', breaks, candles, config);
+  const bosEval = evaluateStudyComponent({ symbol, timeframe, eventType: 'bos', config, htfCandlesMap }, breaks, candles);
 
   const obs = detectOrderBlocks(candles, breaks, { symbol, timeframe });
-  const obResult = evaluateStudyComponent(symbol, timeframe, 'order_block', obs, candles, config);
+  const obEval = evaluateStudyComponent({ symbol, timeframe, eventType: 'order_block', config, htfCandlesMap }, obs, candles);
 
   const sweeps = detectLiquiditySweeps(candles, swings, { symbol, timeframe });
-  const sweepResult = evaluateStudyComponent(symbol, timeframe, 'liquidity_sweep', sweeps, candles, config);
+  const sweepEval = evaluateStudyComponent({ symbol, timeframe, eventType: 'liquidity_sweep', config, htfCandlesMap }, sweeps, candles);
 
-  return [fvgResult, bosResult, obResult, sweepResult];
+  return {
+    observations: [...fvgEval.observations, ...bosEval.observations, ...obEval.observations, ...sweepEval.observations],
+    results: [fvgEval.result, bosEval.result, obEval.result, sweepEval.result]
+  };
+}
+
+export function runUniversalStudy(
+  candles: readonly Candle[],
+  options: RunStudyOptions
+): ComponentStudyResult[] {
+  return [...runObservationStudy(candles, options).results];
 }
 
 export function runFvgStudy(candles: readonly Candle[], options: RunStudyOptions): ComponentStudyResult {
   const all = runUniversalStudy(candles, options);
   return all.find(r => r.eventType === 'fvg')!;
 }
+
+export function toResearchResult(
+  studyResult: ComponentStudyResult,
+  candleCount: number,
+  provenance: Provenance
+): ResearchResult {
+  const baseComp = studyResult.baselineComparisonR2;
+  const sample = {
+    eventType: studyResult.eventType,
+    sampleSize: studyResult.sampleSize,
+    effectiveSampleSize: studyResult.effectiveSampleSize ?? studyResult.sampleSize,
+    clusterCount: studyResult.clusterCount ?? 1
+  };
+
+  return {
+    population: { symbol: studyResult.symbol, timeframe: studyResult.timeframe, candleCount },
+    sample,
+    controls: { sampleSize: studyResult.sampleSize, matchedHitRateR2: baseComp?.baselineProbability ?? 0, matchRatio: 1.0 },
+    descriptive: {
+      hitRates: studyResult.hitRates, medianMfeAtr: studyResult.medianMfeAtr, medianMaeAtr: studyResult.medianMaeAtr,
+      retestProbability: studyResult.retestProbability, fill25Rate: studyResult.fill25Rate,
+      fill50Rate: studyResult.fill50Rate, fullFillRate: studyResult.fullFillRate
+    },
+    effect: { uplift: baseComp?.uplift ?? 0, relativeUplift: baseComp?.relativeUplift, oddsRatio: baseComp?.oddsRatio },
+    uncertainty: { confidenceIntervalR2: studyResult.confidenceIntervalR2, medianMfeAtrCi: studyResult.medianMfeAtrCi },
+    dependence: {
+      clusterCount: sample.clusterCount, effectiveSampleSize: sample.effectiveSampleSize,
+      pValueEstimate: baseComp?.pValueEstimate ?? 1, isStatisticallySignificant: baseComp?.isStatisticallySignificant ?? false
+    },
+    provenance
+  };
+}
+

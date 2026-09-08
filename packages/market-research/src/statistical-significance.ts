@@ -62,112 +62,162 @@ export function calculateClusterEffectiveSampleSize(
   return { effectiveN, designEffect };
 }
 
+export interface ClusterObservation {
+  readonly hits: number;
+  readonly trials: number;
+}
+
+export interface ClusterBootstrapResult {
+  readonly pValue: number;
+  readonly standardError: number;
+  readonly confidenceInterval: { readonly lower: number; readonly upper: number };
+}
+
+export function createMulberry32(seed: number = 42): () => number {
+  let a = seed >>> 0;
+  return () => {
+    let t = (a += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 /**
  * Calculates non-parametric bootstrap confidence interval for medians (MFE/MAE ATR).
  */
 export function calculateBootstrapMedianCi(
   values: readonly number[],
-  iterations: number = 500
+  iterations: number = 500,
+  seed: number = 42
 ): BootstrapConfidenceInterval {
-  if (values.length === 0) {
-    return { lower: 0, upper: 0, pointEstimate: 0, standardError: 0 };
-  }
-
-  const sortedOrig = [...values].sort((a, b) => a - b);
-  const pointEstimate = sortedOrig[Math.floor(sortedOrig.length / 2)]!;
-  if (values.length === 1) {
-    return { lower: pointEstimate, upper: pointEstimate, pointEstimate, standardError: 0 };
-  }
+  if (values.length === 0) return { lower: 0, upper: 0, pointEstimate: 0, standardError: 0 };
+  const sorted = [...values].sort((a, b) => a - b);
+  const pointEstimate = sorted[Math.floor(sorted.length / 2)]!;
+  if (values.length === 1) return { lower: pointEstimate, upper: pointEstimate, pointEstimate, standardError: 0 };
 
   const medians: number[] = [];
-  const n = values.length;
-  // Deterministic pseudo-random seed for reproducible bootstrap
-  let seed = 42;
-  const pseudoRand = () => {
-    seed = (seed * 9301 + 49297) % 233280;
-    return seed / 233280;
-  };
-
+  const rand = createMulberry32(seed);
   for (let b = 0; b < iterations; b++) {
     const sample: number[] = [];
-    for (let i = 0; i < n; i++) {
-      sample.push(values[Math.floor(pseudoRand() * n)]!);
+    for (let i = 0; i < values.length; i++) {
+      sample.push(values[Math.floor(rand() * values.length)]!);
     }
     sample.sort((a, b) => a - b);
-    medians.push(sample[Math.floor(n / 2)]!);
+    medians.push(sample[Math.floor(values.length / 2)]!);
   }
 
   medians.sort((a, b) => a - b);
   const lowIdx = Math.floor(iterations * 0.025);
   const highIdx = Math.min(iterations - 1, Math.ceil(iterations * 0.975));
-
   const meanBoot = medians.reduce((s, v) => s + v, 0) / iterations;
   const variance = medians.reduce((s, v) => s + Math.pow(v - meanBoot, 2), 0) / iterations;
 
+  return { lower: medians[lowIdx]!, upper: medians[highIdx]!, pointEstimate, standardError: Math.sqrt(variance) };
+}
+
+export function calculateClusterBootstrapComparison(
+  eventClusters: readonly ClusterObservation[],
+  baselineClusters: readonly ClusterObservation[],
+  iterations: number = 1000,
+  seed: number = 42
+): ClusterBootstrapResult {
+  if (eventClusters.length === 0 || baselineClusters.length === 0) {
+    return { pValue: 1.0, standardError: 0, confidenceInterval: { lower: 0, upper: 0 } };
+  }
+  const rand = createMulberry32(seed);
+  const uplifts: number[] = [];
+  for (let b = 0; b < iterations; b++) {
+    let evHits = 0, evTrials = 0, baseHits = 0, baseTrials = 0;
+    for (let i = 0; i < eventClusters.length; i++) {
+      const c = eventClusters[Math.floor(rand() * eventClusters.length)]!;
+      evHits += c.hits; evTrials += c.trials;
+    }
+    for (let i = 0; i < baselineClusters.length; i++) {
+      const c = baselineClusters[Math.floor(rand() * baselineClusters.length)]!;
+      baseHits += c.hits; baseTrials += c.trials;
+    }
+    const pEv = evTrials > 0 ? evHits / evTrials : 0;
+    const pBase = baseTrials > 0 ? baseHits / baseTrials : 0;
+    uplifts.push(pEv - pBase);
+  }
+  uplifts.sort((a, b) => a - b);
+  const lowIdx = Math.floor(iterations * 0.025);
+  const highIdx = Math.min(iterations - 1, Math.ceil(iterations * 0.975));
+  const meanU = uplifts.reduce((s, u) => s + u, 0) / iterations;
+  const variance = uplifts.reduce((s, u) => s + (u - meanU) ** 2, 0) / iterations;
+  const nullCount = uplifts.filter(u => u <= 0).length;
+  const pValue = Math.min(1.0, Math.max(0.001, (nullCount + 1) / (iterations + 1)));
+
+  return { pValue, standardError: Math.sqrt(variance), confidenceInterval: { lower: uplifts[lowIdx]!, upper: uplifts[highIdx]! } };
+}
+
+export interface CompareBaselineInput {
+  readonly eventHits: number;
+  readonly eventTrials: number;
+  readonly baselineHits: number;
+  readonly baselineTrials: number;
+  readonly clusterSizes?: readonly number[] | undefined;
+  readonly eventClusters?: readonly ClusterObservation[] | undefined;
+  readonly baselineClusters?: readonly ClusterObservation[] | undefined;
+}
+
+function parseBaselineInput(
+  arg1: CompareBaselineInput | number,
+  arg2?: number,
+  arg3?: number,
+  arg4?: number,
+  arg5?: readonly number[]
+): CompareBaselineInput {
+  if (typeof arg1 === 'object') return arg1;
   return {
-    lower: medians[lowIdx]!,
-    upper: medians[highIdx]!,
-    pointEstimate,
-    standardError: Math.sqrt(variance)
+    eventHits: arg1,
+    eventTrials: arg2 ?? 0,
+    baselineHits: arg3 ?? 0,
+    baselineTrials: arg4 ?? 0,
+    clusterSizes: arg5
   };
 }
 
-/**
- * Compares event hit rate against an unconditional or matched baseline control population.
- */
 export function compareAgainstBaseline(
-  eventHits: number,
-  eventTrials: number,
-  baselineHits: number,
-  baselineTrials: number,
+  inputOrHits: CompareBaselineInput | number,
+  eventTrials?: number,
+  baselineHits?: number,
+  baselineTrials?: number,
   clusterSizes?: readonly number[]
 ): StatisticalEdgeComparison {
-  if (eventTrials === 0 || baselineTrials === 0) {
-    return {
-      baselineProbability: 0,
-      eventProbability: 0,
-      uplift: 0,
-      relativeUplift: 0,
-      oddsRatio: 1,
-      sampleSize: eventTrials,
-      baselineSampleSize: baselineTrials,
-      effectiveSampleSize: eventTrials,
-      isStatisticallySignificant: false,
-      pValueEstimate: 1.0
-    };
+  const inp = parseBaselineInput(inputOrHits, eventTrials, baselineHits, baselineTrials, clusterSizes);
+  const { eventHits, baselineHits: baseHits, eventTrials: evTrials, baselineTrials: baseTrials } = inp;
+  if (evTrials === 0 || baseTrials === 0) {
+    return { baselineProbability: 0, eventProbability: 0, uplift: 0, relativeUplift: 0, oddsRatio: 1, sampleSize: evTrials, baselineSampleSize: baseTrials, effectiveSampleSize: evTrials, isStatisticallySignificant: false, pValueEstimate: 1.0 };
   }
 
-  const p1 = eventHits / eventTrials;
-  const p2 = baselineHits / baselineTrials;
+  const p1 = eventHits / evTrials;
+  const p2 = baseHits / baseTrials;
   const uplift = p1 - p2;
   const relativeUplift = p2 > 0 ? uplift / p2 : 0;
-
   const odds1 = (p1 >= 1) ? 999 : p1 / Math.max(0.0001, 1 - p1);
   const odds2 = (p2 >= 1) ? 999 : p2 / Math.max(0.0001, 1 - p2);
   const oddsRatio = odds2 > 0 ? odds1 / odds2 : 1;
+  const effN = inp.clusterSizes ? calculateClusterEffectiveSampleSize(inp.clusterSizes).effectiveN : evTrials;
 
-  const effN = clusterSizes ? calculateClusterEffectiveSampleSize(clusterSizes).effectiveN : eventTrials;
+  let clusterBootstrap: ClusterBootstrapResult | undefined;
+  let pValueEstimate: number;
 
-  const pPool = (eventHits + baselineHits) / (eventTrials + baselineTrials);
-  const sePool = Math.sqrt(pPool * (1 - pPool) * (1 / effN + 1 / baselineTrials));
-
-  if (sePool === 0) {
-    return {
-      baselineProbability: p2,
-      eventProbability: p1,
-      uplift,
-      relativeUplift,
-      oddsRatio,
-      sampleSize: eventTrials,
-      baselineSampleSize: baselineTrials,
-      effectiveSampleSize: effN,
-      isStatisticallySignificant: false,
-      pValueEstimate: 1.0
-    };
+  if (inp.eventClusters && inp.baselineClusters) {
+    clusterBootstrap = calculateClusterBootstrapComparison(inp.eventClusters, inp.baselineClusters);
+    pValueEstimate = clusterBootstrap.pValue;
+  } else if (inp.clusterSizes && inp.clusterSizes.length > 0) {
+    const rate = evTrials > 0 ? eventHits / evTrials : 0;
+    const evClust = inp.clusterSizes.map(sz => ({ trials: sz, hits: Math.min(sz, Math.round(sz * rate)) }));
+    const baseClust = [{ hits: baseHits, trials: baseTrials }];
+    clusterBootstrap = calculateClusterBootstrapComparison(evClust, baseClust);
+    pValueEstimate = clusterBootstrap.pValue;
+  } else {
+    const pPool = (eventHits + baseHits) / (evTrials + baseTrials);
+    const sePool = Math.sqrt(pPool * (1 - pPool) * (1 / effN + 1 / baseTrials));
+    pValueEstimate = sePool > 0 ? 2 * (1 - normalCdf(Math.abs(uplift / sePool))) : 1.0;
   }
-
-  const zScore = uplift / sePool;
-  const pValue = 2 * (1 - normalCdf(Math.abs(zScore)));
 
   return {
     baselineProbability: p2,
@@ -175,15 +225,16 @@ export function compareAgainstBaseline(
     uplift,
     relativeUplift,
     oddsRatio,
-    sampleSize: eventTrials,
-    baselineSampleSize: baselineTrials,
+    sampleSize: evTrials,
+    baselineSampleSize: baseTrials,
     effectiveSampleSize: effN,
-    isStatisticallySignificant: pValue < 0.05 && uplift > 0,
-    pValueEstimate: Math.max(0, Math.min(1, pValue))
+    isStatisticallySignificant: pValueEstimate < 0.05 && uplift > 0,
+    pValueEstimate: Math.max(0, Math.min(1, pValueEstimate)),
+    ...(clusterBootstrap ? { clusterBootstrap } : {})
   };
 }
 
-function normalCdf(x: number): number {
+export function normalCdf(x: number): number {
   const a1 = 0.254829592;
   const a2 = -0.284496736;
   const a3 = 1.421413741;

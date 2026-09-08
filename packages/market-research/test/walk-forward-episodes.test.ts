@@ -52,6 +52,8 @@ describe('Episode Clustering & Walk-Forward Validation', () => {
     });
 
     expect(windows.length).toBeGreaterThanOrEqual(2);
+    expect(windows[0]!.frozenHypotheses?.length).toBeGreaterThanOrEqual(1);
+    expect(windows[0]!.frozenHypotheses?.some(f => f.component === 'fvg')).toBe(true);
     expect(stability.some(s => s.component === 'fvg')).toBe(true);
   });
 });

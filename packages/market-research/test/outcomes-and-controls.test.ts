@@ -12,7 +12,8 @@ import { generateMatchedControls } from '../src/matched-controls.js';
 import {
   calculateClusterEffectiveSampleSize,
   calculateBootstrapMedianCi,
-  compareAgainstBaseline
+  compareAgainstBaseline,
+  calculateClusterBootstrapComparison
 } from '../src/statistical-significance.js';
 
 function makeCandle(ts: number, open: number, high: number, low: number, close: number): Candle {
@@ -125,6 +126,66 @@ describe('Typed Outcome Evaluators & Competing Risk', () => {
 
     expect(outOptimistic.firstHit).toBe('target_first');
   });
+
+  it('ensures stop breach on earlier bar prevents subsequent target_first and freezes MFE', () => {
+    const ev = {
+      id: 'barrier-1',
+      type: 'test',
+      symbol: 'BTC',
+      timeframe: '15m' as const,
+      detectedAt: 1000,
+      originIndex: 0,
+      direction: 'bullish' as const
+    };
+
+    // Entry at close = 100. Target = 120 (2R). Stop = 90 (1R).
+    const candles: Candle[] = [
+      makeCandle(1000, 98, 101, 97, 100), // origin (entry = 100)
+      makeCandle(2000, 99, 102, 85, 88),  // bar 1: low = 85 breaches stop 90!
+      makeCandle(3000, 89, 135, 88, 130)  // bar 2: high = 135 reaches target 120, BUT trade was stopped on bar 1!
+    ];
+
+    const outcome = evaluateGenericOutcome(ev, candles, new Decimal(10), {
+      horizonCandles: 3,
+      targetR: 2.0,
+      stopAtrMultiplier: 1.0,
+      ambiguityPolicy: 'pessimistic'
+    });
+
+    expect(outcome.firstHit).toBe('stop_first');
+    expect(outcome.timeToFirstHitBars).toBe(1);
+    expect(outcome.hit2R).toBe(false); // Did NOT reach target before stopping out!
+    expect(outcome.targetHitR.toNumber()).toBe(-1);
+    expect(outcome.mfe.toNumber()).toBe(2); // Only favorable excursion before/at stop bar (102 - 100)
+  });
+
+  it('halts zone penetration measurement once FVG is invalidated', () => {
+    const fvg: FvgEvent = {
+      id: 'fvg-inval',
+      type: 'fvg',
+      symbol: 'BTCUSDT',
+      timeframe: '15m',
+      detectedAt: 1000,
+      originIndex: 0,
+      direction: 'bullish',
+      top: new Decimal(100),
+      bottom: new Decimal(90),
+      consequentEncroachment: new Decimal(95),
+      size: new Decimal(10)
+    };
+
+    const candles: Candle[] = [
+      makeCandle(1000, 90, 95, 88, 92),
+      makeCandle(2000, 96, 97, 85, 87), // dips to 85 (pen = 15 / 10 = 1.5) and closes at 87 (< 90 => INVALIDATED)
+      makeCandle(3000, 86, 88, 60, 65)  // further plunge to 60, but penetration measurement MUST NOT grow after invalidation
+    ];
+
+    const outcome = evaluateFvgOutcome(fvg, candles, new Decimal(10));
+    expect(outcome.isInvalidated).toBe(true);
+    expect(outcome.fullFill).toBe(true);
+    expect(outcome.timeToFirstHitBars).toBe(1);
+    expect(outcome.firstHit).toBe('stop_first');
+  });
 });
 
 describe('Direction-Aware Matched Controls', () => {
@@ -154,18 +215,29 @@ describe('Direction-Aware Matched Controls', () => {
     expect(controls).toHaveLength(1);
     expect(controls[0]!.direction).toBe('bullish'); // Symmetric direction!
     expect(controls[0]!.controlOriginIndex).not.toBe(10); // Non-event candle
+    expect(controls.matchRatio).toBe(1.0);
+  });
+
+  it('enforces 1:1 matching without replacement and supports stratified regime matching', () => {
+    const candles: Candle[] = [];
+    for (let i = 0; i < 30; i++) {
+      candles.push(makeCandle(1000 + i * 60000, 100, 102, 98, 100));
+    }
+
+    const ev1: BaseEvent = { id: 'e1', type: 'fvg', symbol: 'BTC', timeframe: '15m', detectedAt: 1000, originIndex: 10, direction: 'bullish' };
+    const ev2: BaseEvent = { id: 'e2', type: 'fvg', symbol: 'BTC', timeframe: '15m', detectedAt: 2000, originIndex: 12, direction: 'bullish' };
+
+    const controls = generateMatchedControls([ev1, ev2], candles, undefined, { matchTrendRegime: true });
+    expect(controls).toHaveLength(2);
+    expect(controls[0]!.controlOriginIndex).not.toBe(controls[1]!.controlOriginIndex);
   });
 });
 
 describe('Cluster-Aware Statistical Inference', () => {
   it('computes effective sample size via design effect for clustered episodes', () => {
-    // 100 events across 20 episodes (average 5 events per episode)
     const clusterSizes = Array(20).fill(5);
     const { effectiveN, designEffect } = calculateClusterEffectiveSampleSize(clusterSizes, 0.25);
-
-    // deff = 1 + (5 - 1) * 0.25 = 2.0
     expect(designEffect).toBe(2.0);
-    // effectiveN = 100 / 2.0 = 50
     expect(effectiveN).toBe(50);
   });
 
@@ -184,8 +256,24 @@ describe('Cluster-Aware Statistical Inference', () => {
     expect(stats.eventProbability).toBe(0.6);
     expect(stats.baselineProbability).toBe(0.4);
     expect(stats.uplift).toBeCloseTo(0.2);
-    expect(stats.relativeUplift).toBeCloseTo(0.5); // 0.2 / 0.4 = 0.5 (50% relative edge)
+    expect(stats.relativeUplift).toBeCloseTo(0.5);
     expect(stats.oddsRatio).toBeGreaterThan(1.5);
     expect(stats.effectiveSampleSize).toBeLessThan(100);
+  });
+
+  it('computes empirical cluster bootstrap confidence interval and p-value across episodes', () => {
+    const evClusters = [
+      { hits: 7, trials: 10 }, { hits: 9, trials: 10 }, { hits: 8, trials: 10 },
+      { hits: 6, trials: 10 }, { hits: 9, trials: 10 }, { hits: 7, trials: 10 }
+    ];
+    const ctrlClusters = [
+      { hits: 2, trials: 10 }, { hits: 4, trials: 10 }, { hits: 3, trials: 10 },
+      { hits: 1, trials: 10 }, { hits: 4, trials: 10 }, { hits: 2, trials: 10 }
+    ];
+
+    const boot = calculateClusterBootstrapComparison(evClusters, ctrlClusters, 200);
+    expect(boot.pValue).toBeLessThan(0.05);
+    expect(boot.confidenceInterval.lower).toBeGreaterThan(0.2);
+    expect(boot.confidenceInterval.upper).toBeGreaterThan(boot.confidenceInterval.lower);
   });
 });

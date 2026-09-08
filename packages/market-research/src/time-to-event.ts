@@ -68,3 +68,76 @@ export function computeTimeToEventProfile(
     survivalCurve
   };
 }
+
+export interface QuantileSummary {
+  readonly p10: number;
+  readonly p25: number;
+  readonly p50: number;
+  readonly p75: number;
+  readonly p90: number;
+}
+
+export interface ExcursionStep {
+  readonly thresholdAtr: number;
+  readonly probabilityExceeding: number;
+}
+
+export interface OutcomeDistribution {
+  readonly sampleSize: number;
+  readonly mfeAtrQuantiles: QuantileSummary | null;
+  readonly maeAtrQuantiles: QuantileSummary | null;
+  readonly mfeDistribution: readonly ExcursionStep[];
+  readonly maeDistribution: readonly ExcursionStep[];
+}
+
+function calculateQuantileSummary(values: number[]): QuantileSummary | null {
+  if (values.length === 0) return null;
+  return {
+    p10: calculatePercentile(values, 0.10) ?? 0,
+    p25: calculatePercentile(values, 0.25) ?? 0,
+    p50: calculatePercentile(values, 0.50) ?? 0,
+    p75: calculatePercentile(values, 0.75) ?? 0,
+    p90: calculatePercentile(values, 0.90) ?? 0
+  };
+}
+
+/**
+ * Computes non-parametric empirical excursion distributions (MFE/MAE quantiles and threshold exceedance).
+ */
+export function computeOutcomeDistribution(
+  outcomes: readonly BaseOutcome[],
+  atrThresholds: readonly number[] = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0]
+): OutcomeDistribution {
+  const n = outcomes.length;
+  if (n === 0) {
+    return {
+      sampleSize: 0,
+      mfeAtrQuantiles: null,
+      maeAtrQuantiles: null,
+      mfeDistribution: [],
+      maeDistribution: []
+    };
+  }
+
+  const mfeVals = outcomes.map(o => o.mfeAtr.toNumber());
+  const maeVals = outcomes.map(o => o.maeAtr.toNumber());
+
+  const mfeDistribution = atrThresholds.map(t => ({
+    thresholdAtr: t,
+    probabilityExceeding: outcomes.filter(o => o.mfeAtr.toNumber() >= t).length / n
+  }));
+
+  const maeDistribution = atrThresholds.map(t => ({
+    thresholdAtr: t,
+    probabilityExceeding: outcomes.filter(o => o.maeAtr.toNumber() >= t).length / n
+  }));
+
+  return {
+    sampleSize: n,
+    mfeAtrQuantiles: calculateQuantileSummary(mfeVals),
+    maeAtrQuantiles: calculateQuantileSummary(maeVals),
+    mfeDistribution,
+    maeDistribution
+  };
+}
+

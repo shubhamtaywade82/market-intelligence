@@ -12,11 +12,29 @@ export interface StructureOptions {
   readonly symbol: string;
   readonly timeframe: Timeframe;
   readonly requireClose?: boolean;
+  readonly dualBreakPolicy?: 'skip' | 'allow_both' | 'close_direction';
+}
+
+function resolveDualBreak(
+  candle: Candle,
+  highBreached: boolean,
+  lowBreached: boolean,
+  policy: StructureOptions['dualBreakPolicy'] = 'close_direction'
+): { allowHigh: boolean; allowLow: boolean } {
+  if (!highBreached || !lowBreached) {
+    return { allowHigh: highBreached, allowLow: lowBreached };
+  }
+  if (policy === 'skip') return { allowHigh: false, allowLow: false };
+  if (policy === 'allow_both') return { allowHigh: true, allowLow: true };
+
+  // 'close_direction': prioritize break in the direction of candle body close
+  const isCloseUp = candle.close.gte(candle.open);
+  return { allowHigh: isCloseUp, allowLow: !isCloseUp };
 }
 
 /**
  * Detects Break of Structure (BOS), Change of Character (CHoCH), and Market Structure Shift (MSS)
- * using an explicit multi-state structure model.
+ * using an explicit multi-state structure model with same-bar dual break resolution.
  */
 export function detectStructureBreaks(
   candles: readonly Candle[],
@@ -38,78 +56,113 @@ export function detectStructureBreaks(
     const lastHigh = [...activeSwings].reverse().find(s => s.type === 'high');
     const lastLow = [...activeSwings].reverse().find(s => s.type === 'low');
 
-    if (lastHigh) {
-      const isBreached = requireClose ? candle.close.gt(lastHigh.price) : candle.high.gt(lastHigh.price);
-      if (isBreached) {
-        const prevTrend = state.trend;
-        const isMss = prevTrend === 'bearish';
-        const isChoch = prevTrend === 'bearish' && (lastHigh.strength === 'micro' || lastHigh.strength === 'minor');
-        const eventType = isChoch ? 'choch' : isMss ? 'mss' : 'bos';
-        const level: StructureLevel = (lastHigh.strength === 'micro' || lastHigh.strength === 'minor') ? 'internal' : 'external';
-        const nextTrend: TrendState = 'bullish';
+    const highBreached = !!lastHigh && (requireClose ? candle.close.gt(lastHigh.price) : candle.high.gt(lastHigh.price));
+    const lowBreached = !!lastLow && (requireClose ? candle.close.lt(lastLow.price) : candle.low.lt(lastLow.price));
 
-        brokenSwingIds.add(lastHigh.id);
-        state = {
-          trend: nextTrend,
-          transition: isMss ? 'mss' : isChoch ? 'choch' : 'continuation',
-          lastConfirmedHigh: lastHigh,
-          protectedLow: lastLow
-        };
+    const { allowHigh, allowLow } = resolveDualBreak(candle, highBreached, lowBreached, options.dualBreakPolicy);
 
-        breaks.push({
-          id: `${options.symbol}-${options.timeframe}-${eventType}-bull-${candle.timestamp}`,
-          type: eventType,
-          symbol: options.symbol,
-          timeframe: options.timeframe,
-          detectedAt: candle.timestamp,
-          originIndex: i,
-          direction: 'bullish',
-          brokenSwing: lastHigh,
-          breakPrice: candle.close,
-          isCloseConfirmed: candle.close.gt(lastHigh.price),
-          level,
-          trendBeforeBreak: prevTrend,
-          trendAfterBreak: nextTrend
-        });
-      }
+    if (allowHigh && lastHigh) {
+      const prevTrend = state.trend;
+      const isMss = prevTrend === 'bearish';
+      const isChoch = prevTrend === 'bearish' && (lastHigh.strength === 'micro' || lastHigh.strength === 'minor');
+      const eventType = isChoch ? 'choch' : isMss ? 'mss' : 'bos';
+      const level: StructureLevel = (lastHigh.strength === 'micro' || lastHigh.strength === 'minor') ? 'internal' : 'external';
+      const nextTrend: TrendState = 'bullish';
+
+      brokenSwingIds.add(lastHigh.id);
+      state = {
+        trend: nextTrend,
+        transition: isMss ? 'mss' : isChoch ? 'choch' : 'continuation',
+        lastConfirmedHigh: lastHigh,
+        protectedLow: lastLow
+      };
+
+      breaks.push({
+        id: `${options.symbol}-${options.timeframe}-${eventType}-bull-${candle.timestamp}`,
+        type: eventType,
+        version: '1.0.0',
+        symbol: options.symbol,
+        timeframe: options.timeframe,
+        detectedAt: candle.timestamp,
+        originIndex: i,
+        direction: 'bullish',
+        brokenSwing: lastHigh,
+        breakPrice: candle.close,
+        isCloseConfirmed: candle.close.gt(lastHigh.price),
+        level,
+        trendBeforeBreak: prevTrend,
+        trendAfterBreak: nextTrend
+      });
     }
 
-    if (lastLow) {
-      const isBreached = requireClose ? candle.close.lt(lastLow.price) : candle.low.lt(lastLow.price);
-      if (isBreached) {
-        const prevTrend = state.trend;
-        const isMss = prevTrend === 'bullish';
-        const isChoch = prevTrend === 'bullish' && (lastLow.strength === 'micro' || lastLow.strength === 'minor');
-        const eventType = isChoch ? 'choch' : isMss ? 'mss' : 'bos';
-        const level: StructureLevel = (lastLow.strength === 'micro' || lastLow.strength === 'minor') ? 'internal' : 'external';
-        const nextTrend: TrendState = 'bearish';
+    if (allowLow && lastLow) {
+      const prevTrend = state.trend;
+      const isMss = prevTrend === 'bullish';
+      const isChoch = prevTrend === 'bullish' && (lastLow.strength === 'micro' || lastLow.strength === 'minor');
+      const eventType = isChoch ? 'choch' : isMss ? 'mss' : 'bos';
+      const level: StructureLevel = (lastLow.strength === 'micro' || lastLow.strength === 'minor') ? 'internal' : 'external';
+      const nextTrend: TrendState = 'bearish';
 
-        brokenSwingIds.add(lastLow.id);
-        state = {
-          trend: nextTrend,
-          transition: isMss ? 'mss' : isChoch ? 'choch' : 'continuation',
-          lastConfirmedLow: lastLow,
-          protectedHigh: lastHigh
-        };
+      brokenSwingIds.add(lastLow.id);
+      state = {
+        trend: nextTrend,
+        transition: isMss ? 'mss' : isChoch ? 'choch' : 'continuation',
+        lastConfirmedLow: lastLow,
+        protectedHigh: lastHigh
+      };
 
-        breaks.push({
-          id: `${options.symbol}-${options.timeframe}-${eventType}-bear-${candle.timestamp}`,
-          type: eventType,
-          symbol: options.symbol,
-          timeframe: options.timeframe,
-          detectedAt: candle.timestamp,
-          originIndex: i,
-          direction: 'bearish',
-          brokenSwing: lastLow,
-          breakPrice: candle.close,
-          isCloseConfirmed: candle.close.lt(lastLow.price),
-          level,
-          trendBeforeBreak: prevTrend,
-          trendAfterBreak: nextTrend
-        });
-      }
+      breaks.push({
+        id: `${options.symbol}-${options.timeframe}-${eventType}-bear-${candle.timestamp}`,
+        type: eventType,
+        version: '1.0.0',
+        symbol: options.symbol,
+        timeframe: options.timeframe,
+        detectedAt: candle.timestamp,
+        originIndex: i,
+        direction: 'bearish',
+        brokenSwing: lastLow,
+        breakPrice: candle.close,
+        isCloseConfirmed: candle.close.lt(lastLow.price),
+        level,
+        trendBeforeBreak: prevTrend,
+        trendAfterBreak: nextTrend
+      });
     }
   }
 
   return breaks;
 }
+
+/**
+ * Detects Break of Structure (BOS) indicating trend continuation.
+ */
+export function detectBos(
+  candles: readonly Candle[],
+  swings: readonly SwingPoint[],
+  options: StructureOptions
+): StructureBreakEvent[] {
+  return detectStructureBreaks(candles, swings, options).filter(b => b.type === 'bos');
+}
+
+/**
+ * Detects Change of Character (CHoCH) indicating early counter-trend internal structure breach.
+ */
+export function detectChoch(
+  candles: readonly Candle[],
+  swings: readonly SwingPoint[],
+  options: StructureOptions
+): StructureBreakEvent[] {
+  return detectStructureBreaks(candles, swings, options).filter(b => b.type === 'choch');
+}
+
+/**
+ * Detects Market Structure Shift (MSS) indicating external major structural reversal.
+ */
+export function detectMss(
+  candles: readonly Candle[],
+  swings: readonly SwingPoint[],
+  options: StructureOptions
+): StructureBreakEvent[] {
+  return detectStructureBreaks(candles, swings, options).filter(b => b.type === 'mss');
+}
+
