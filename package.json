@@ -7,6 +7,7 @@
     "build": "pnpm -r build",
     "test": "vitest run",
     "typecheck": "pnpm -r typecheck",
+    "cli": "pnpm --filter @nemesis-oss/market-research cli",
     "lint": "eslint packages"
   },
   "devDependencies": {

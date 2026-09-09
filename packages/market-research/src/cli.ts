@@ -75,8 +75,18 @@ export function runResearchCli(symbol: string = 'BTCUSDT'): string {
   return `${matrixMd}\n\n${stabilityMd}`;
 }
 
-const isMainModule = process.argv[1] && process.argv[1].endsWith('cli.js');
+function parseSymbolArg(args: readonly string[]): string {
+  const symIdx = args.indexOf('--symbol');
+  if (symIdx !== -1 && args[symIdx + 1] && !args[symIdx + 1]!.startsWith('-')) {
+    return args[symIdx + 1]!;
+  }
+  const firstNonFlag = args.find(a => !a.startsWith('-'));
+  return firstNonFlag ?? 'BTCUSDT';
+}
+
+const isMainModule = process.argv[1] && (process.argv[1].endsWith('cli.js') || process.argv[1].endsWith('cli.ts'));
 if (isMainModule) {
-  const output = runResearchCli(process.argv[2] ?? 'BTCUSDT');
+  const symbol = parseSymbolArg(process.argv.slice(2));
+  const output = runResearchCli(symbol);
   process.stdout.write(`${output}\n`);
 }

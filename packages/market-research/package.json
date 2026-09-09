@@ -14,7 +14,8 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "cli": "node dist/cli.js"
   },
   "dependencies": {
     "@nemesis-oss/market-events": "workspace:*",
