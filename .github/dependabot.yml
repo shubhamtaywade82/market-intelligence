@@ -1,0 +1,53 @@
+version: 2
+updates:
+  # npm dependencies at the monorepo root + every workspace package.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore(deps)
+      include: scope
+    groups:
+      # Group minor/patch updates so the inbox stays manageable.
+      typescript:
+        update-types: [minor, patch]
+        patterns:
+          - 'typescript'
+          - '@types/*'
+      vitest:
+        update-types: [minor, patch]
+        patterns:
+          - 'vitest'
+          - '@vitest/*'
+      decimal:
+        update-types: [minor, patch]
+        patterns:
+          - 'decimal.js'
+      zod:
+        update-types: [minor, patch]
+        patterns:
+          - 'zod'
+          - 'zod-to-json-schema'
+    # Major version bumps and runtime packages get individual PRs so
+    # breaking changes are reviewed in isolation.
+    ignore:
+      - dependency-name: '@nemesis-oss/agentic-runtime'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@nemesis-oss/ollama-sdk'
+        update-types: ['version-update:semver-major']
+
+  # Keep GitHub Actions themselves current.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: chore(ci)
+      include: scope
