@@ -362,19 +362,21 @@ export function createResearchTools(context: ResearchContext): ToolkitCatalogue 
   catalogue.place({
     handle: 'evaluate_interaction',
     caption:
-      'Evaluate whether two event types co-occur with statistical meaningfully different outcomes versus either alone. Returns interaction uplift, incremental contributions, and redundancy score. Use this to test combinations like FVG + liquidity sweep.',
+      'Evaluate whether two event types co-occur with statistically meaningfully different outcomes versus either alone. Returns interaction uplift, incremental contributions, and redundancy score. Use this to test combinations like FVG + liquidity sweep. Set requireDirectionMatch=false to analyse cross-direction interactions (e.g. bearish BOS as a filter for bullish FVG outcomes).',
     argsShape: z.object({
       eventA: z.enum(DETECTABLE_EVENT_TYPES),
       eventB: z.enum(DETECTABLE_EVENT_TYPES),
       targetMetric: z.enum(['hit1R', 'hit2R', 'hit3R']).default('hit2R'),
       maxBarGap: z.number().int().positive().default(3),
       horizonCandles: z.number().int().positive().default(24),
+      requireDirectionMatch: z.boolean().default(true),
+      requirePriorOrCoincident: z.boolean().default(true),
     }),
     resourceClass: 'local-cpu',
     effects: 'pure',
     grantLevel: 'auto',
     discoverability: {
-      keywords: ['interaction', 'combination', 'pair', 'incremental', 'redundancy'],
+      keywords: ['interaction', 'combination', 'pair', 'incremental', 'redundancy', 'cross_direction'],
       category: 'research',
       priority: 6,
     },
@@ -397,8 +399,8 @@ export function createResearchTools(context: ResearchContext): ToolkitCatalogue 
           {
             targetMetric: args.targetMetric,
             maxBarGap: args.maxBarGap,
-            requireDirectionMatch: true,
-            requirePriorOrCoincident: true,
+            requireDirectionMatch: args.requireDirectionMatch,
+            requirePriorOrCoincident: args.requirePriorOrCoincident,
           },
         );
 
@@ -409,6 +411,8 @@ export function createResearchTools(context: ResearchContext): ToolkitCatalogue 
             timeframe: context.timeframe,
             horizonCandles: args.horizonCandles,
             targetMetric: args.targetMetric,
+            requireDirectionMatch: args.requireDirectionMatch,
+            requirePriorOrCoincident: args.requirePriorOrCoincident,
             pair,
             anchor,
           },
@@ -424,6 +428,8 @@ export function createResearchTools(context: ResearchContext): ToolkitCatalogue 
     targetMetric: 'hit1R' | 'hit2R' | 'hit3R';
     maxBarGap: number;
     horizonCandles: number;
+    requireDirectionMatch: boolean;
+    requirePriorOrCoincident: boolean;
   }>);
 
   /* -- 7. negative evidence impact -------------------------------- */
@@ -507,17 +513,40 @@ export function createResearchTools(context: ResearchContext): ToolkitCatalogue 
           horizonCandles: args.horizonCandles,
           embargoBars: args.embargoBars,
         });
-        return verifiedResult(
-          'run_walk_forward',
-          {
-            symbol: context.symbol,
-            timeframe: context.timeframe,
-            windowCount: result.windows.length,
-            stability: result.stability,
-            stabilityMarkdown: formatStabilityMarkdown(result.stability),
-          },
-          started,
-        );
+        // Project per-window data to a compact, model-citable shape.
+        // Full WalkForwardWindow objects carry nested train/test results
+        // arrays that would blow the context budget; we keep only the
+        // fields the model needs to cite degradation numbers.
+        const windows = result.windows.map((w, i) => ({
+          windowIndex: i,
+          trainStartTime: w.trainStartTime,
+          testStartTime: w.testStartTime,
+          testEndTime: w.testEndTime,
+          embargoBars: w.embargoBars ?? null,
+          purgedTrainEventsCount: w.purgedTrainEventsCount ?? null,
+          frozenHypothesesCount: w.frozenHypotheses?.length ?? 0,
+          trainResults: w.trainResults.map((r) => ({
+            eventType: r.eventType,
+            sampleSize: r.sampleSize,
+            reachRate2R: r.reachRates.r2,
+          })),
+          testResults: w.testResults.map((r) => ({
+            eventType: r.eventType,
+            sampleSize: r.sampleSize,
+            reachRate2R: r.reachRates.r2,
+          })),
+        }));
+        const output = clampToolOutput({
+          symbol: context.symbol,
+          timeframe: context.timeframe,
+          horizonCandles: args.horizonCandles,
+          embargoBars: args.embargoBars ?? null,
+          windowCount: result.windows.length,
+          windows,
+          stability: result.stability,
+          stabilityMarkdown: formatStabilityMarkdown(result.stability),
+        });
+        return verifiedResult('run_walk_forward', output, started);
       } catch (err) {
         return failedResult('run_walk_forward', err, started);
       }
