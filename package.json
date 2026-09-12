@@ -12,6 +12,7 @@
     "test": "vitest run",
     "typecheck": "pnpm -r typecheck",
     "cli": "pnpm --filter @nemesis-oss/market-research cli",
+    "live-study": "pnpm --filter @nemesis-oss/market-research live-study",
     "lint": "eslint packages"
   },
   "devDependencies": {

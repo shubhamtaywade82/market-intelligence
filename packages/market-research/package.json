@@ -15,7 +15,8 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "cli": "node dist/cli.js"
+    "cli": "node dist/cli.js",
+    "live-study": "node dist/live-study-cli.js"
   },
   "dependencies": {
     "@nemesis-oss/market-data": "workspace:*",
