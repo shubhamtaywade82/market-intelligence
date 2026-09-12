@@ -34,11 +34,22 @@ updates:
           - 'zod'
           - 'zod-to-json-schema'
     # Major version bumps and runtime packages get individual PRs so
-    # breaking changes are reviewed in isolation.
+    # breaking changes are reviewed in isolation. Some packages are
+    # pinned to a specific major and must NOT auto-bump:
+    #  - @types/node: major must track the Node.js LTS major we run on
+    #    (currently 22). Bumping to @types/node@26 tracks Node 26 which
+    #    does not exist as LTS and causes type mismatches.
+    #  - zod: agentic-runtime declares `zod: ^3.24` as a peer dep. Bumping
+    #    research-agent to zod 4 creates a dual-zod install (runtime uses
+    #    3.x, agent uses 4.x) — works today but invites subtle breakage.
     ignore:
       - dependency-name: '@nemesis-oss/agentic-runtime'
         update-types: ['version-update:semver-major']
       - dependency-name: '@nemesis-oss/ollama-sdk'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'zod'
         update-types: ['version-update:semver-major']
 
   # Keep GitHub Actions themselves current.

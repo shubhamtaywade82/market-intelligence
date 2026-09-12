@@ -22,7 +22,7 @@
     "@nemesis-oss/market-events": "workspace:*",
     "@nemesis-oss/market-research": "workspace:*",
     "decimal.js": "^10.4.3",
-    "zod": "^4.5"
+    "zod": "^3.24"
   },
   "peerDependencies": {
     "@nemesis-oss/ollama-sdk": "^1.3.0"
@@ -34,7 +34,7 @@
   },
   "devDependencies": {
     "@nemesis-oss/ollama-sdk": "^1.3.0",
-    "@types/node": "^26.5.0",
+    "@types/node": "^22.13.0",
     "typescript": "^5.7.3",
     "vitest": "^5.0.0"
   }
