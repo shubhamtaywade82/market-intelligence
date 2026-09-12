@@ -42,6 +42,9 @@ updates:
     #  - zod: agentic-runtime declares `zod: ^3.24` as a peer dep. Bumping
     #    research-agent to zod 4 creates a dual-zod install (runtime uses
     #    3.x, agent uses 4.x) — works today but invites subtle breakage.
+    #  - typescript: TS 7 is a major breaking change (compiler API,
+    #    decorator semantics, module resolution). Must be a manual,
+    #    reviewed upgrade — not an auto-bump.
     ignore:
       - dependency-name: '@nemesis-oss/agentic-runtime'
         update-types: ['version-update:semver-major']
@@ -50,6 +53,8 @@ updates:
       - dependency-name: '@types/node'
         update-types: ['version-update:semver-major']
       - dependency-name: 'zod'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'typescript'
         update-types: ['version-update:semver-major']
 
   # Keep GitHub Actions themselves current.
