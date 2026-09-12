@@ -27,7 +27,7 @@ describe('Historical Data Pipeline', () => {
     };
 
     const candles = await downloadPaginatedKlines(mockSource, {
-      symbol: 'BTCUSDT',
+      symbol: 'ETHUSDT',
       timeframe: '15m',
       startTime: 1000,
       endTime: 5000,
@@ -50,18 +50,18 @@ describe('Historical Data Pipeline', () => {
     };
 
     const candles = await downloadPaginatedKlines(mockSource, {
-      symbol: 'BTCUSDT',
+      symbol: 'ETHUSDT',
       timeframe: '1h',
       startTime: 1000,
       endTime: 2000,
       batchLimit: 10
     });
 
-    const savedPath = await saveDataset(tmpDir, 'BTCUSDT', '1h', candles);
-    expect(savedPath).toContain('BTCUSDT-1h.json');
+    const savedPath = await saveDataset(tmpDir, 'ETHUSDT', '1h', candles);
+    expect(savedPath).toContain('ETHUSDT-1h.json');
 
     const loaded = await loadDataset(savedPath);
-    expect(loaded.metadata.symbol).toBe('BTCUSDT');
+    expect(loaded.metadata.symbol).toBe('ETHUSDT');
     expect(loaded.metadata.count).toBe(1);
     expect(loaded.candles[0]!.open.toNumber()).toBe(50000);
 

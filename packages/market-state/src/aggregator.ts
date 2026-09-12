@@ -9,7 +9,7 @@ import type { BaseEvent } from '@nemesis-oss/market-events';
  * breadth indicators, and a unified event feed sorted across all streams.
  *
  * This is what `crypto-agent` reads to answer questions like "What is the
- * overall market doing?" rather than "What is BTCUSDT doing?"
+ * overall market doing?" rather than "What is ETHUSDT doing?"
  */
 export interface AggregatedMarketState {
   /** Wall-clock time this snapshot was produced. */

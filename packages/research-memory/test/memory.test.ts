@@ -4,7 +4,7 @@ import type { StrategyCandidate } from '@nemesis-oss/strategy-discovery';
 
 import { createResearchMemory, computeDatasetHash } from '../src/memory.js';
 
-function makeHypothesis(id: string, symbol = 'BTCUSDT'): Hypothesis {
+function makeHypothesis(id: string, symbol = 'ETHUSDT'): Hypothesis {
   return {
     id,
     description: `Test ${id}`,
@@ -75,10 +75,10 @@ describe('research-memory / ResearchMemory', () => {
 
   it('records and queries datasets', () => {
     const mem = createResearchMemory();
-    const hash = computeDatasetHash('BTCUSDT', '15m', 500, 1, 2);
+    const hash = computeDatasetHash('ETHUSDT', '15m', 500, 1, 2);
     mem.recordDataset({
       id: 'ds-1',
-      symbol: 'BTCUSDT',
+      symbol: 'ETHUSDT',
       timeframe: '15m',
       candleCount: 500,
       startTime: 1,
@@ -87,7 +87,7 @@ describe('research-memory / ResearchMemory', () => {
       createdAt: Date.now(),
     });
 
-    const found = mem.findDataset('BTCUSDT', '15m', hash);
+    const found = mem.findDataset('ETHUSDT', '15m', hash);
     expect(found).toBeDefined();
     expect(found!.id).toBe('ds-1');
   });
@@ -136,8 +136,8 @@ describe('research-memory / ResearchMemory', () => {
   });
 
   it('computes deterministic dataset hashes', () => {
-    const h1 = computeDatasetHash('BTCUSDT', '15m', 500, 1, 2);
-    const h2 = computeDatasetHash('BTCUSDT', '15m', 500, 1, 2);
+    const h1 = computeDatasetHash('ETHUSDT', '15m', 500, 1, 2);
+    const h2 = computeDatasetHash('ETHUSDT', '15m', 500, 1, 2);
     const h3 = computeDatasetHash('ETHUSDT', '15m', 500, 1, 2);
     expect(h1).toBe(h2);
     expect(h1).not.toBe(h3);

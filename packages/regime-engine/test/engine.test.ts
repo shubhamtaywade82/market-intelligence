@@ -31,8 +31,8 @@ function makeCandles(count: number, trend: 'bull' | 'bear' | 'range' = 'range'):
 describe('regime-engine / classifyRegime', () => {
   it('classifies a bullish trending market', () => {
     const candles = makeCandles(60, 'bull');
-    const regime = classifyRegime(candles, 59, 'BTCUSDT', '15m');
-    expect(regime.symbol).toBe('BTCUSDT');
+    const regime = classifyRegime(candles, 59, 'ETHUSDT', '15m');
+    expect(regime.symbol).toBe('ETHUSDT');
     expect(regime.timeframe).toBe('15m');
     expect(regime.trend).toBe('bullish');
     expect(regime.momentum).toBe('positive');
@@ -66,13 +66,13 @@ describe('regime-engine / classifyRegime', () => {
 
   it('returns flat_oi when no derivatives data', () => {
     const candles = makeCandles(60);
-    const regime = classifyRegime(candles, 59, 'BTCUSDT', '15m');
+    const regime = classifyRegime(candles, 59, 'ETHUSDT', '15m');
     expect(regime.derivatives).toBe('flat_oi');
   });
 
   it('produces a summary string joining all dimensions', () => {
     const candles = makeCandles(60, 'bull');
-    const regime = classifyRegime(candles, 59, 'BTCUSDT', '15m', {
+    const regime = classifyRegime(candles, 59, 'ETHUSDT', '15m', {
       openInterestChange: 0.05,
     });
     const parts = regime.summary.split('+');
@@ -84,16 +84,16 @@ describe('regime-engine / classifyRegime', () => {
 describe('regime-engine / diffRegimes', () => {
   it('detects regime transitions', () => {
     const candles = makeCandles(60, 'bull');
-    const a = classifyRegime(candles, 30, 'BTCUSDT', '15m');
-    const b = classifyRegime(candles, 59, 'BTCUSDT', '15m');
+    const a = classifyRegime(candles, 30, 'ETHUSDT', '15m');
+    const b = classifyRegime(candles, 59, 'ETHUSDT', '15m');
     const diffs = diffRegimes(a, b);
     expect(Array.isArray(diffs)).toBe(true);
   });
 
   it('returns empty array for identical regimes', () => {
     const candles = makeCandles(60);
-    const a = classifyRegime(candles, 50, 'BTCUSDT', '15m');
-    const b = classifyRegime(candles, 50, 'BTCUSDT', '15m');
+    const a = classifyRegime(candles, 50, 'ETHUSDT', '15m');
+    const b = classifyRegime(candles, 50, 'ETHUSDT', '15m');
     expect(diffRegimes(a, b)).toEqual([]);
   });
 });

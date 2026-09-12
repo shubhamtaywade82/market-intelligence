@@ -26,7 +26,7 @@ Empirical market event research, trajectory evaluation, counterfactual controls,
 import { runObservationStudy, toResearchResult } from '@nemesis-oss/market-research';
 
 const study = runObservationStudy(candles, {
-  symbol: 'BTCUSDT',
+  symbol: 'ETHUSDT',
   timeframe: '15m',
   horizonCandles: 24,
   ambiguityPolicy: 'pessimistic'
@@ -47,8 +47,8 @@ for (const result of study.results) {
 
 ## Research CLI
 
-Run multi-timeframe research directly from the command line:
+Run multi-timeframe research directly from the command line (fetches Binance spot klines per timeframe):
 
 ```bash
-pnpm run cli --symbol BTCUSDT --timeframes 15m,1h,4h --horizon 24
+pnpm run cli -- --symbol ETHUSDT --timeframes 15m,1h,4h --horizon 24 --lookback 1000
 ```

@@ -29,7 +29,7 @@ function makeEvent<T extends BaseEvent = BaseEvent>(id: string, overrides: Parti
   return {
     id,
     type: 'test',
-    symbol: 'BTCUSDT',
+    symbol: 'ETHUSDT',
     timeframe: '15m',
     detectedAt: 1000,
     originIndex: 0,

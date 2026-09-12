@@ -26,7 +26,7 @@ describe('Displacement & Polarity Inversions', () => {
     candles.push(makeCandle(1000 + 14 * 60000, 100, 110, 99.8, 109.8));
 
     const displacements = detectDisplacement(candles, {
-      symbol: 'BTCUSDT',
+      symbol: 'ETHUSDT',
       timeframe: '15m',
       minMagnitudeAtr: new Decimal(1.5),
       minBodyRatio: new Decimal(0.7)
@@ -42,7 +42,7 @@ describe('Displacement & Polarity Inversions', () => {
     const ob: OrderBlockEvent = {
       id: 'ob-1',
       type: 'order_block',
-      symbol: 'BTCUSDT',
+      symbol: 'ETHUSDT',
       timeframe: '15m',
       detectedAt: 2000,
       originIndex: 1,
@@ -59,7 +59,7 @@ describe('Displacement & Polarity Inversions', () => {
       makeCandle(3000, 103, 104, 98, 97)   // Closes at 97 (< 100 bottom) => Bearish Breaker
     ];
 
-    const breakers = detectBreakerBlocks(candles, [ob], { symbol: 'BTCUSDT', timeframe: '15m' });
+    const breakers = detectBreakerBlocks(candles, [ob], { symbol: 'ETHUSDT', timeframe: '15m' });
     expect(breakers).toHaveLength(1);
     const breaker = breakers[0]!;
     expect(breaker.direction).toBe('bearish');
@@ -71,7 +71,7 @@ describe('Displacement & Polarity Inversions', () => {
     const fvg: FvgEvent = {
       id: 'fvg-1',
       type: 'fvg',
-      symbol: 'BTCUSDT',
+      symbol: 'ETHUSDT',
       timeframe: '15m',
       detectedAt: 2000,
       originIndex: 1,
@@ -88,7 +88,7 @@ describe('Displacement & Polarity Inversions', () => {
       makeCandle(3000, 112, 112, 99, 100)   // Closes at 100 (< 102 bottom) => Bearish IFVG
     ];
 
-    const ifvgs = detectInvertedFvg(candles, [fvg], { symbol: 'BTCUSDT', timeframe: '15m' });
+    const ifvgs = detectInvertedFvg(candles, [fvg], { symbol: 'ETHUSDT', timeframe: '15m' });
     expect(ifvgs).toHaveLength(1);
     const ifvg = ifvgs[0]!;
     expect(ifvg.direction).toBe('bearish');

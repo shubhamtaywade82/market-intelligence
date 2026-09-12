@@ -50,7 +50,7 @@ export interface ResearchAgentFromExchangeOptions {
  *
  * const agent = await createResearchAgentFromExchange({
  *   adapter: createBinanceAdapter(),
- *   symbol: 'BTCUSDT',
+ *   symbol: 'ETHUSDT',
  *   timeframe: '15m',
  *   startTime: Date.now() - 30 * 24 * 60 * 60 * 1000,  // 30 days
  *   endTime: Date.now(),
@@ -58,7 +58,7 @@ export interface ResearchAgentFromExchangeOptions {
  * });
  *
  * const result = await agent.research(
- *   'Does bullish FVG continuation on BTCUSDT 15m provide statistically significant 2R edge?',
+ *   'Does bullish FVG continuation on ETHUSDT 15m provide statistically significant 2R edge?',
  * );
  * console.log(result.report);
  * ```

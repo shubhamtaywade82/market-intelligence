@@ -98,7 +98,7 @@ async function main() {
     {
       adapter,
       streams: [
-        { symbol: 'BTCUSDT', timeframe: '15m' },
+        { symbol: 'ETHUSDT', timeframe: '15m' },
         { symbol: 'ETHUSDT', timeframe: '15m' },
       ],
       detectors: ['fvg', 'bos', 'liquidity_sweep'],
@@ -134,7 +134,7 @@ async function main() {
   console.log('  Endpoints:');
   console.log('    GET /health              — health check');
   console.log('    GET /markets             — active market streams');
-  console.log('    GET /state/BTCUSDT/15m    — current BTCUSDT MarketState');
+  console.log('    GET /state/ETHUSDT/15m    — current ETHUSDT MarketState');
   console.log('    GET /events               — all active events');
   console.log('    GET /strategies           — registered strategies');
   console.log('    GET /research             — experiment count');
@@ -166,11 +166,11 @@ async function main() {
   console.log(`    ${JSON.stringify(body)}`);
   console.log();
 
-  // Probe /state/BTCUSDT/15m
+  // Probe /state/ETHUSDT/15m
   await sleep(1000);
-  res = await fetch(`http://localhost:${port}/state/BTCUSDT/15m`);
+  res = await fetch(`http://localhost:${port}/state/ETHUSDT/15m`);
   body = await res.json();
-  console.log(`  GET /state/BTCUSDT/15m → ${res.status}`);
+  console.log(`  GET /state/ETHUSDT/15m → ${res.status}`);
   if (res.status === 200) {
     const state = body as {
       symbol: string;

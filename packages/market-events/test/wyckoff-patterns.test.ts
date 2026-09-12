@@ -26,7 +26,7 @@ describe('Wyckoff & Classical Chart Patterns', () => {
     ];
 
     const swings = detectSwings(candles, { leftBars: 1, rightBars: 1 });
-    const events = detectWyckoffEvents(candles, swings, { symbol: 'BTCUSDT', timeframe: '15m' });
+    const events = detectWyckoffEvents(candles, swings, { symbol: 'ETHUSDT', timeframe: '15m' });
 
     expect(events).toHaveLength(1);
     const spring = events[0]!;
@@ -44,7 +44,7 @@ describe('Wyckoff & Classical Chart Patterns', () => {
     ];
 
     const patterns = detectDoublePatterns(swings, {
-      symbol: 'BTCUSDT',
+      symbol: 'ETHUSDT',
       timeframe: '15m',
       toleranceRatio: new Decimal(0.01)
     });

@@ -19,7 +19,7 @@ describe('evaluateFvgOutcome', () => {
     const fvg: FvgEvent = {
       id: 'test-bull-fvg',
       type: 'fvg',
-      symbol: 'BTCUSDT',
+      symbol: 'ETHUSDT',
       timeframe: '15m',
       detectedAt: 3000,
       originIndex: 2,

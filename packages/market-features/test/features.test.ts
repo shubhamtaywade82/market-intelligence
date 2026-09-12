@@ -29,8 +29,8 @@ function makeCandles(count: number): Candle[] {
 describe('market-features / computeFeatures', () => {
   it('computes price features with Decimal-precision strings', () => {
     const candles = makeCandles(50);
-    const f = computeFeatures(candles, 49, 'BTCUSDT');
-    expect(f.symbol).toBe('BTCUSDT');
+    const f = computeFeatures(candles, 49, 'ETHUSDT');
+    expect(f.symbol).toBe('ETHUSDT');
     expect(f.candleIndex).toBe(49);
     expect(typeof f.price.returns).toBe('string');
     expect(typeof f.price.atr).toBe('string');
@@ -42,7 +42,7 @@ describe('market-features / computeFeatures', () => {
 
   it('computes volume features including CVD', () => {
     const candles = makeCandles(50);
-    const f = computeFeatures(candles, 49, 'BTCUSDT');
+    const f = computeFeatures(candles, 49, 'ETHUSDT');
     expect(typeof f.volume.volumeDelta).toBe('string');
     expect(typeof f.volume.relativeVolume).toBe('string');
     expect(typeof f.volume.cvd).toBe('string');
@@ -52,7 +52,7 @@ describe('market-features / computeFeatures', () => {
 
   it('computes microstructure features from OHLC', () => {
     const candles = makeCandles(50);
-    const f = computeFeatures(candles, 49, 'BTCUSDT');
+    const f = computeFeatures(candles, 49, 'ETHUSDT');
     const bodyRatio = Number(f.microstructure.bodyRatio);
     const wickRatio = Number(f.microstructure.wickRatio);
     expect(bodyRatio).toBeGreaterThanOrEqual(0);
@@ -63,7 +63,7 @@ describe('market-features / computeFeatures', () => {
 
   it('includes derivatives when OI data is supplied', () => {
     const candles = makeCandles(50);
-    const f = computeFeatures(candles, 49, 'BTCUSDT', {
+    const f = computeFeatures(candles, 49, 'ETHUSDT', {
       openInterest: 1_050_000,
       prevOpenInterest: 1_000_000,
       fundingRate: 0.0001,
@@ -75,13 +75,13 @@ describe('market-features / computeFeatures', () => {
 
   it('omits derivatives when OI data is absent', () => {
     const candles = makeCandles(50);
-    const f = computeFeatures(candles, 49, 'BTCUSDT');
+    const f = computeFeatures(candles, 49, 'ETHUSDT');
     expect(f.derivatives).toBeUndefined();
   });
 
   it('produces JSON-serializable output', () => {
     const candles = makeCandles(50);
-    const f = computeFeatures(candles, 49, 'BTCUSDT');
+    const f = computeFeatures(candles, 49, 'ETHUSDT');
     const json = JSON.stringify(f);
     expect(json.length).toBeGreaterThan(0);
     expect(json).not.toMatch(/\{\}/);
@@ -89,7 +89,7 @@ describe('market-features / computeFeatures', () => {
 
   it('throws on out-of-range index', () => {
     const candles = makeCandles(10);
-    expect(() => computeFeatures(candles, 10, 'BTCUSDT')).toThrow(/out of range/);
-    expect(() => computeFeatures(candles, -1, 'BTCUSDT')).toThrow(/out of range/);
+    expect(() => computeFeatures(candles, 10, 'ETHUSDT')).toThrow(/out of range/);
+    expect(() => computeFeatures(candles, -1, 'ETHUSDT')).toThrow(/out of range/);
   });
 });

@@ -43,7 +43,7 @@ describe('Episode Clustering & Walk-Forward Validation', () => {
     }
 
     const { windows, stability } = runWalkForwardValidation(candles, {
-      symbol: 'BTCUSDT',
+      symbol: 'ETHUSDT',
       timeframe: '15m',
       trainCandlesCount: 80,
       testCandlesCount: 40,
@@ -79,7 +79,7 @@ describe('Episode Clustering & Walk-Forward Validation', () => {
     }
 
     const { windows } = runWalkForwardValidation(candles, {
-      symbol: 'BTCUSDT',
+      symbol: 'ETHUSDT',
       timeframe: '15m',
       trainCandlesCount: 80,
       testCandlesCount: 40,

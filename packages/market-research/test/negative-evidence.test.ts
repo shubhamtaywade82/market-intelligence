@@ -19,7 +19,7 @@ function makeObservationWithHtf(overrides: {
   const event: BaseEvent = {
     id: 'ev-test',
     type: 'fvg',
-    symbol: 'BTCUSDT',
+    symbol: 'ETHUSDT',
     timeframe: '15m',
     detectedAt: 1000,
     originIndex: 10,
@@ -64,7 +64,7 @@ function makeObservationWithHtf(overrides: {
     },
     outcome,
     provenance: {
-      datasetId: 'BTCUSDT-15m',
+      datasetId: 'ETHUSDT-15m',
       datasetHash: 'abc',
       detectorId: 'fvg',
       detectorVersion: '1.0.0',

@@ -140,7 +140,7 @@ When you want the deterministic numbers without spinning up Ollama — for
 a CLI, a backtest harness, or a unit test — call tools directly:
 
 ```ts
-const agent = createResearchAgent({ symbol: 'BTCUSDT', timeframe: '15m', candles });
+const agent = createResearchAgent({ symbol: 'ETHUSDT', timeframe: '15m', candles });
 
 const summary = await agent.invokeTool('dataset_summary', {});
 const fvgEvents = await agent.invokeTool('detect_events', { eventType: 'fvg' });
@@ -197,7 +197,7 @@ as a third pnpm workspace package. The integration path:
    }));
 
    const agent = createResearchAgent({
-     symbol: 'BTCUSDT',
+     symbol: 'ETHUSDT',
      timeframe: '15m',
      candles,
      htfCandles: { '1h': htfCandles1h, '4h': htfCandles4h },

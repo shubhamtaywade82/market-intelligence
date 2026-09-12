@@ -3,7 +3,7 @@ import type { StrategyCandidate } from '@nemesis-oss/strategy-discovery';
 
 import { createStrategyRegistry } from '../src/registry.js';
 
-function makeCandidate(id: string, symbol = 'BTCUSDT'): StrategyCandidate {
+function makeCandidate(id: string, symbol = 'ETHUSDT'): StrategyCandidate {
   return {
     id,
     hypothesis: {
@@ -95,14 +95,14 @@ describe('strategy-registry / StrategyRegistry', () => {
 
   it('queries by status and symbol', () => {
     const reg = createStrategyRegistry();
-    reg.register(makeCandidate('s1', 'BTCUSDT'));
+    reg.register(makeCandidate('s1', 'ETHUSDT'));
     reg.register(makeCandidate('s2', 'ETHUSDT'));
-    reg.register(makeCandidate('s3', 'BTCUSDT'));
+    reg.register(makeCandidate('s3', 'ETHUSDT'));
 
     const active = reg.byStatus('DISCOVERED');
     expect(active.length).toBe(3);
 
-    const btc = reg.bySymbol('BTCUSDT');
+    const btc = reg.bySymbol('ETHUSDT');
     expect(btc.length).toBe(2);
   });
 

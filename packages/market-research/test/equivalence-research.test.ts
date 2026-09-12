@@ -26,7 +26,7 @@ function makeObservation(id: string, hit2R: boolean): ResearchObservation {
     event: {
       id,
       type: 'fvg',
-      symbol: 'BTCUSDT',
+      symbol: 'ETHUSDT',
       timeframe: '15m',
       detectedAt: 1000,
       originIndex: 10,
@@ -39,7 +39,7 @@ function makeObservation(id: string, hit2R: boolean): ResearchObservation {
     },
     outcome,
     provenance: {
-      datasetId: 'BTCUSDT-15m',
+      datasetId: 'ETHUSDT-15m',
       datasetHash: 'abc',
       detectorId: 'fvg',
       detectorVersion: '1.0.0',
@@ -56,7 +56,7 @@ describe('Equivalence Research Engine', () => {
       {
         id: 'sweep-1',
         type: 'liquidity_sweep',
-        symbol: 'BTCUSDT',
+        symbol: 'ETHUSDT',
         timeframe: '15m',
         detectedAt: ts,
         originIndex: 10,
@@ -69,7 +69,7 @@ describe('Equivalence Research Engine', () => {
       {
         id: 'spring-1',
         type: 'wyckoff',
-        symbol: 'BTCUSDT',
+        symbol: 'ETHUSDT',
         timeframe: '15m',
         detectedAt: ts,
         originIndex: 10,
@@ -81,7 +81,7 @@ describe('Equivalence Research Engine', () => {
       {
         id: 'vsa-1',
         type: 'vsa',
-        symbol: 'BTCUSDT',
+        symbol: 'ETHUSDT',
         timeframe: '15m',
         detectedAt: ts,
         originIndex: 10,

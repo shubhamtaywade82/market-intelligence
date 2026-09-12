@@ -18,6 +18,7 @@
     "cli": "node dist/cli.js"
   },
   "dependencies": {
+    "@nemesis-oss/market-data": "workspace:*",
     "@nemesis-oss/market-events": "workspace:*",
     "decimal.js": "^10.4.3"
   },

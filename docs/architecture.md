@@ -219,7 +219,7 @@ See [`packages/research-agent/README.md`](../../packages/research-agent/README.m
    }));
 
    const agent = createResearchAgent({
-     symbol: 'BTCUSDT',
+     symbol: 'ETHUSDT',
      timeframe: '15m',
      candles,
      htfCandles: { '1h': htfCandles1h, '4h': htfCandles4h },

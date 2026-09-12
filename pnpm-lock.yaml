@@ -250,6 +250,9 @@ importers:
 
   packages/market-research:
     dependencies:
+      '@nemesis-oss/market-data':
+        specifier: workspace:*
+        version: link:../market-data
       '@nemesis-oss/market-events':
         specifier: workspace:*
         version: link:../market-events

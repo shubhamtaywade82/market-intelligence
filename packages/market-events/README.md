@@ -51,12 +51,12 @@ import {
 const swings = detectSwings(candles, { leftBars: 2, rightBars: 2 });
 
 // 2. Detect continuation BOS vs counter-trend CHoCH
-const bos = detectBos(candles, swings, { symbol: 'BTCUSDT', timeframe: '15m' });
-const choch = detectChoch(candles, swings, { symbol: 'BTCUSDT', timeframe: '15m' });
+const bos = detectBos(candles, swings, { symbol: 'ETHUSDT', timeframe: '15m' });
+const choch = detectChoch(candles, swings, { symbol: 'ETHUSDT', timeframe: '15m' });
 
 // 3. Detect order blocks formed at structural breaks
-const orderBlocks = detectOrderBlocks(candles, bos, { symbol: 'BTCUSDT', timeframe: '15m' });
+const orderBlocks = detectOrderBlocks(candles, bos, { symbol: 'ETHUSDT', timeframe: '15m' });
 
 // 4. Detect liquidity sweeps with pool reclaim
-const sweeps = detectLiquiditySweeps(candles, swings, { symbol: 'BTCUSDT', timeframe: '15m' });
+const sweeps = detectLiquiditySweeps(candles, swings, { symbol: 'ETHUSDT', timeframe: '15m' });
 ```

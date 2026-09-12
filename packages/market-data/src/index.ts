@@ -37,7 +37,7 @@ import type { BybitAdapterConfig } from './bybit/rest.js';
  *
  * const binance = createExchangeAdapter('binance');
  * const candles = await binance.fetchKlines({
- *   symbol: 'BTCUSDT',
+ *   symbol: 'ETHUSDT',
  *   timeframe: '15m',
  *   startTime: Date.now() - 24 * 60 * 60 * 1000,
  *   endTime: Date.now(),

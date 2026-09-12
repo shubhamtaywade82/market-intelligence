@@ -182,14 +182,14 @@ describe('market-stream / createMarketStream', () => {
     const stream = createMarketStream(
       {
         adapter,
-        streams: [{ symbol: 'BTCUSDT', timeframe: '15m' }],
+        streams: [{ symbol: 'ETHUSDT', timeframe: '15m' }],
         candleBufferDepth: 50,
         detectors: ['fvg'],
         eventLookbackBars: 5,
       },
       {
         onState: (s) => states.push(s),
-        onCandle: () => {},
+        onCandle: () => { },
       },
     );
 
@@ -197,12 +197,12 @@ describe('market-stream / createMarketStream', () => {
 
     // Push 20 candles — enough for swings, structure, FVGs.
     for (let i = 0; i < 20; i++) {
-      pushCandle('BTCUSDT', '15m', makeCandle(i));
+      pushCandle('ETHUSDT', '15m', makeCandle(i));
     }
 
     expect(states.length).toBe(19); // first candle doesn't produce state (needs >= 2)
     const last = states[states.length - 1]!;
-    expect(last.symbol).toBe('BTCUSDT');
+    expect(last.symbol).toBe('ETHUSDT');
     expect(last.timeframe).toBe('15m');
     expect(typeof last.price).toBe('string');
     expect(last.candleCount).toBe(20);
@@ -284,14 +284,14 @@ describe('market-stream / createMarketStream', () => {
       {
         adapter,
         streams: [
-          { symbol: 'BTCUSDT', timeframe: '15m' },
+          { symbol: 'ETHUSDT', timeframe: '15m' },
           { symbol: 'ETHUSDT', timeframe: '15m' },
         ],
         detectors: null,
       },
       {
         onState: (s) => {
-          if (s.symbol === 'BTCUSDT') btcStates.push(1);
+          if (s.symbol === 'ETHUSDT') btcStates.push(1);
           if (s.symbol === 'ETHUSDT') ethStates.push(1);
         },
       },
@@ -301,7 +301,7 @@ describe('market-stream / createMarketStream', () => {
 
     // Push only BTC candles.
     for (let i = 0; i < 5; i++) {
-      pushCandle('BTCUSDT', '15m', makeCandle(i, 100));
+      pushCandle('ETHUSDT', '15m', makeCandle(i, 100));
     }
 
     expect(btcStates.length).toBe(4); // first candle doesn't produce state
@@ -324,7 +324,7 @@ describe('market-stream / createMarketStream', () => {
     const stream = createMarketStream(
       {
         adapter,
-        streams: [{ symbol: 'BTCUSDT', timeframe: '15m' }],
+        streams: [{ symbol: 'ETHUSDT', timeframe: '15m' }],
         detectors: null,
       },
       {},
@@ -332,7 +332,7 @@ describe('market-stream / createMarketStream', () => {
 
     await stream.start();
 
-    const key: StreamKey = { symbol: 'BTCUSDT', timeframe: '15m' };
+    const key: StreamKey = { symbol: 'ETHUSDT', timeframe: '15m' };
     expect(stream.getState(key)).toBeNull();
     expect(stream.getCandles(key).length).toBe(0);
 
@@ -345,7 +345,7 @@ describe('market-stream / createMarketStream', () => {
     const stream = createMarketStream(
       {
         adapter,
-        streams: [{ symbol: 'BTCUSDT', timeframe: '15m' }],
+        streams: [{ symbol: 'ETHUSDT', timeframe: '15m' }],
         detectors: null,
       },
       {},
@@ -353,11 +353,11 @@ describe('market-stream / createMarketStream', () => {
 
     await stream.start();
 
-    const key: StreamKey = { symbol: 'BTCUSDT', timeframe: '15m' };
+    const key: StreamKey = { symbol: 'ETHUSDT', timeframe: '15m' };
     expect(stream.isAlive(key)).toBe(true); // adapter immediately fires 'open'
 
     // Simulate disconnect.
-    setStatus('BTCUSDT', '15m', 'closed');
+    setStatus('ETHUSDT', '15m', 'closed');
     expect(stream.isAlive(key)).toBe(false);
 
     await stream.stop();
@@ -369,7 +369,7 @@ describe('market-stream / createMarketStream', () => {
     const stream = createMarketStream(
       {
         adapter,
-        streams: [{ symbol: 'BTCUSDT', timeframe: '15m' }],
+        streams: [{ symbol: 'ETHUSDT', timeframe: '15m' }],
         detectors: ['fvg'],
         eventLookbackBars: 5,
       },
@@ -379,10 +379,10 @@ describe('market-stream / createMarketStream', () => {
     await stream.start();
 
     for (let i = 0; i < 30; i++) {
-      pushCandle('BTCUSDT', '15m', makeCandle(i, 100));
+      pushCandle('ETHUSDT', '15m', makeCandle(i, 100));
     }
 
-    const key: StreamKey = { symbol: 'BTCUSDT', timeframe: '15m' };
+    const key: StreamKey = { symbol: 'ETHUSDT', timeframe: '15m' };
     const state = stream.getState(key)!;
     const json = JSON.stringify(state);
 

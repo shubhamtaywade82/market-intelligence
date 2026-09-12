@@ -30,7 +30,7 @@ describe('VSA & Derivatives Event Engines', () => {
     candles.push(makeCandle(1000 + 21 * 60000, 100, 100.2, 95, 98.5, 300));
 
     const events = detectVsaEvents(candles, {
-      symbol: 'BTCUSDT',
+      symbol: 'ETHUSDT',
       timeframe: '15m',
       lookback: 20
     });
@@ -59,7 +59,7 @@ describe('VSA & Derivatives Event Engines', () => {
     ];
 
     const events = detectDerivativesEvents(snapshots, {
-      symbol: 'BTCUSDT',
+      symbol: 'ETHUSDT',
       timeframe: '15m'
     });
 

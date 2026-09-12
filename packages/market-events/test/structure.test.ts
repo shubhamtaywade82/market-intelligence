@@ -66,13 +66,13 @@ describe('Deterministic Structure Engine', () => {
     ];
 
     const swings = detectSwings(candles, { leftBars: 1, rightBars: 1 });
-    const breaks = detectStructureBreaks(candles, swings, { symbol: 'BTCUSDT', timeframe: '15m' });
+    const breaks = detectStructureBreaks(candles, swings, { symbol: 'ETHUSDT', timeframe: '15m' });
 
     expect(breaks.length).toBeGreaterThanOrEqual(1);
     const bullBreak = breaks.find(b => b.direction === 'bullish');
     expect(bullBreak).toBeDefined();
 
-    const obs = detectOrderBlocks(candles, breaks, { symbol: 'BTCUSDT', timeframe: '15m' });
+    const obs = detectOrderBlocks(candles, breaks, { symbol: 'ETHUSDT', timeframe: '15m' });
     expect(obs.length).toBeGreaterThanOrEqual(1);
     const bullOb = obs.find(o => o.direction === 'bullish');
     expect(bullOb).toBeDefined();
@@ -88,7 +88,7 @@ describe('Deterministic Structure Engine', () => {
     ];
 
     const swings = detectSwings(candles, { leftBars: 1, rightBars: 1 });
-    const sweeps = detectLiquiditySweeps(candles, swings, { symbol: 'BTCUSDT', timeframe: '15m' });
+    const sweeps = detectLiquiditySweeps(candles, swings, { symbol: 'ETHUSDT', timeframe: '15m' });
 
     expect(sweeps).toHaveLength(1);
     const sweep = sweeps[0]!;
@@ -110,7 +110,7 @@ describe('Deterministic Structure Engine', () => {
     ];
 
     const swings = detectSwings(candles, { leftBars: 1, rightBars: 1 });
-    const opts = { symbol: 'BTCUSDT', timeframe: '15m' as const };
+    const opts = { symbol: 'ETHUSDT', timeframe: '15m' as const };
 
     const allBreaks = detectStructureBreaks(candles, swings, opts);
     expect(allBreaks[0]?.version).toBe('1.0.0');
@@ -134,9 +134,9 @@ describe('Deterministic Structure Engine', () => {
     ];
 
     const swings = detectSwings(candles, { leftBars: 1, rightBars: 1 });
-    const breaks = detectStructureBreaks(candles, swings, { symbol: 'BTCUSDT', timeframe: '15m' });
-    const obs = detectOrderBlocks(candles, breaks, { symbol: 'BTCUSDT', timeframe: '15m' });
-    const sweeps = detectLiquiditySweeps(candles, swings, { symbol: 'BTCUSDT', timeframe: '15m' });
+    const breaks = detectStructureBreaks(candles, swings, { symbol: 'ETHUSDT', timeframe: '15m' });
+    const obs = detectOrderBlocks(candles, breaks, { symbol: 'ETHUSDT', timeframe: '15m' });
+    const sweeps = detectLiquiditySweeps(candles, swings, { symbol: 'ETHUSDT', timeframe: '15m' });
 
     for (const ev of [...breaks, ...obs, ...sweeps]) {
       expect(() => validateEventCausality(ev)).not.toThrow();

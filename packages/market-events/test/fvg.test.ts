@@ -22,7 +22,7 @@ describe('detectFvg', () => {
       makeCandle(3000, 118, 125, 110, 122)  // low = 110 (> 105)
     ];
 
-    const events = detectFvg(candles, { symbol: 'BTCUSDT', timeframe: '15m' });
+    const events = detectFvg(candles, { symbol: 'ETHUSDT', timeframe: '15m' });
     expect(events).toHaveLength(1);
     const event = events[0]!;
     expect(event.direction).toBe('bullish');
@@ -39,7 +39,7 @@ describe('detectFvg', () => {
       makeCandle(3000, 100, 108, 95, 104)   // high = 108 (< 115)
     ];
 
-    const events = detectFvg(candles, { symbol: 'BTCUSDT', timeframe: '15m' });
+    const events = detectFvg(candles, { symbol: 'ETHUSDT', timeframe: '15m' });
     expect(events).toHaveLength(1);
     const event = events[0]!;
     expect(event.direction).toBe('bearish');
@@ -56,7 +56,7 @@ describe('detectFvg', () => {
       makeCandle(3000, 107, 110, 104, 109) // low 104 <= high 105
     ];
 
-    const events = detectFvg(candles, { symbol: 'BTCUSDT', timeframe: '15m' });
+    const events = detectFvg(candles, { symbol: 'ETHUSDT', timeframe: '15m' });
     expect(events).toHaveLength(0);
   });
 });

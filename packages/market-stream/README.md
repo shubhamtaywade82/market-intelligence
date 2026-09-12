@@ -49,7 +49,7 @@ const stream = createMarketStream(
   {
     adapter: createBinanceAdapter(),
     streams: [
-      { symbol: 'BTCUSDT', timeframe: '15m' },
+      { symbol: 'ETHUSDT', timeframe: '15m' },
       { symbol: 'ETHUSDT', timeframe: '15m' },
     ],
     candleBufferDepth: 200,      // rolling window per stream
@@ -76,7 +76,7 @@ const stream = createMarketStream(
 await stream.start();
 
 // Read state on demand:
-const btcState = stream.getState({ symbol: 'BTCUSDT', timeframe: '15m' });
+const btcState = stream.getState({ symbol: 'ETHUSDT', timeframe: '15m' });
 console.log(btcState?.price);
 
 // Later:

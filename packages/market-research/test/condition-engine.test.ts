@@ -24,7 +24,7 @@ function createDummyObservation(overrides: {
   const event: BaseEvent = {
     id: 'ev-1',
     type: 'fvg',
-    symbol: 'BTCUSDT',
+    symbol: 'ETHUSDT',
     timeframe: '15m',
     detectedAt: 1000,
     originIndex: 10,
@@ -70,7 +70,7 @@ function createDummyObservation(overrides: {
     },
     outcome,
     provenance: {
-      datasetId: 'BTCUSDT-15m',
+      datasetId: 'ETHUSDT-15m',
       datasetHash: 'abc',
       detectorId: 'fvg',
       detectorVersion: '1.0.0',

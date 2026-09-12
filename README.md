@@ -58,8 +58,8 @@ Evaluations never reference bars before `availableAtIndex` or future data. Verif
 
 ### 2. Separation of Market Behavior and Trade Execution
 
-* **[`BaseOutcome`](packages/market-research/src/types.ts)**: Measures pure price excursion (`mfeAtr`, `maeAtr`, `reached1R`, `reached2R`, `reached3R`, `timeTo1R`, collision resolution).
-* **[`TradeOutcome`](packages/market-research/src/types.ts)**: Separate execution simulation layer handling entry/exit fills, fees, slippage, and `realizedR`.
+- **[`BaseOutcome`](packages/market-research/src/types.ts)**: Measures pure price excursion (`mfeAtr`, `maeAtr`, `reached1R`, `reached2R`, `reached3R`, `timeTo1R`, collision resolution).
+- **[`TradeOutcome`](packages/market-research/src/types.ts)**: Separate execution simulation layer handling entry/exit fills, fees, slippage, and `realizedR`.
 
 ### 3. Matched Counterfactual Controls
 
@@ -100,10 +100,10 @@ import { detectSwings, detectBos, detectFvg } from '@nemesis-oss/market-events';
 const swings = detectSwings(candles, { leftBars: 2, rightBars: 2 });
 
 // Detect Break of Structure (continuation)
-const bosEvents = detectBos(candles, swings, { symbol: 'BTCUSDT', timeframe: '15m' });
+const bosEvents = detectBos(candles, swings, { symbol: 'ETHUSDT', timeframe: '15m' });
 
 // Detect Fair Value Gaps
-const fvgEvents = detectFvg(candles, { symbol: 'BTCUSDT', timeframe: '15m' });
+const fvgEvents = detectFvg(candles, { symbol: 'ETHUSDT', timeframe: '15m' });
 ```
 
 ### Running an Empirical Study (`market-research`)
@@ -112,7 +112,7 @@ const fvgEvents = detectFvg(candles, { symbol: 'BTCUSDT', timeframe: '15m' });
 import { runObservationStudy } from '@nemesis-oss/market-research';
 
 const study = runObservationStudy(candles, {
-  symbol: 'BTCUSDT',
+  symbol: 'ETHUSDT',
   timeframe: '15m',
   horizonCandles: 24,
   ambiguityPolicy: 'pessimistic'
@@ -157,7 +157,7 @@ import { createResearchAgentFromExchange } from '@nemesis-oss/market-research-ag
 
 const agent = await createResearchAgentFromExchange({
   adapter: createBinanceAdapter(),
-  symbol: 'BTCUSDT',
+  symbol: 'ETHUSDT',
   timeframe: '15m',
   startTime: Date.now() - 30 * 24 * 60 * 60 * 1000,  // 30 days
   endTime: Date.now(),
@@ -165,7 +165,7 @@ const agent = await createResearchAgentFromExchange({
 });
 
 const result = await agent.research(
-  'Does bullish FVG continuation on BTCUSDT 15m provide statistically significant 2R edge?',
+  'Does bullish FVG continuation on ETHUSDT 15m provide statistically significant 2R edge?',
 );
 console.log(result.report);
 ```
@@ -182,7 +182,7 @@ const stream = createMarketStream(
   {
     adapter: createBinanceAdapter(),
     streams: [
-      { symbol: 'BTCUSDT', timeframe: '15m' },
+      { symbol: 'ETHUSDT', timeframe: '15m' },
       { symbol: 'ETHUSDT', timeframe: '15m' },
     ],
     detectors: ['fvg', 'bos', 'liquidity_sweep'],
@@ -220,7 +220,7 @@ const fvgStudy = await agent.invokeTool('run_event_study', {
 import { runWalkForwardValidation, formatStabilityMarkdown } from '@nemesis-oss/market-research';
 
 const { windows, stability } = runWalkForwardValidation(candles, {
-  symbol: 'BTCUSDT',
+  symbol: 'ETHUSDT',
   timeframe: '15m',
   trainCandlesCount: 1000,
   testCandlesCount: 250,
@@ -234,11 +234,11 @@ console.log(formatStabilityMarkdown(stability));
 
 ### Research CLI Runner
 
-Generate a multi-timeframe effectiveness report for any asset:
+Generate a multi-timeframe effectiveness report for any asset (Binance spot klines):
 
 ```bash
 cd packages/market-research
-pnpm run cli --symbol BTCUSDT --timeframes 15m,1h,4h --horizon 24
+pnpm run cli -- --symbol ETHUSDT --timeframes 15m,1h,4h --horizon 24 --lookback 1000
 ```
 
 ---
@@ -260,10 +260,10 @@ No release workflow yet. It will be added when `@nemesis-oss/market-research-age
 
 ## Documentation
 
-* [Architecture & Methodology Guide](docs/architecture.md)
-* [Roadmap: market intelligence platform](ROADMAP.md)
-* [`market-data` README](packages/market-data/README.md) — exchange adapters
-* [`market-stream` README](packages/market-stream/README.md) — live market intelligence
-* [`market-events` README](packages/market-events/README.md)
-* [`market-research` README](packages/market-research/README.md)
-* [`research-agent` README](packages/research-agent/README.md) — including integration with `crypto-agent`
+- [Architecture & Methodology Guide](docs/architecture.md)
+- [Roadmap: market intelligence platform](ROADMAP.md)
+- [`market-data` README](packages/market-data/README.md) — exchange adapters
+- [`market-stream` README](packages/market-stream/README.md) — live market intelligence
+- [`market-events` README](packages/market-events/README.md)
+- [`market-research` README](packages/market-research/README.md)
+- [`research-agent` README](packages/research-agent/README.md) — including integration with `crypto-agent`

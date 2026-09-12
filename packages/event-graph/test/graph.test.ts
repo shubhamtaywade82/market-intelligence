@@ -11,7 +11,7 @@ function makeEvent(
   return {
     id: `ev-${type}-${index}`,
     type: type as BaseEvent['type'],
-    symbol: 'BTCUSDT',
+    symbol: 'ETHUSDT',
     timeframe: '15m',
     direction,
     detectedAt: Date.now(),
@@ -29,10 +29,10 @@ describe('event-graph / buildEventGraph', () => {
       ['bos', [makeEvent('bos', 12)]],
     ]);
 
-    const graph = buildEventGraph(events, 'BTCUSDT', '15m');
+    const graph = buildEventGraph(events, 'ETHUSDT', '15m');
 
     expect(graph.nodes.length).toBe(3);
-    expect(graph.symbol).toBe('BTCUSDT');
+    expect(graph.symbol).toBe('ETHUSDT');
   });
 
   it('builds edges between temporally proximate events', () => {
@@ -42,7 +42,7 @@ describe('event-graph / buildEventGraph', () => {
       ['mss', [makeEvent('mss', 14)]],
     ]);
 
-    const graph = buildEventGraph(events, 'BTCUSDT', '15m', { maxBarGap: 5 });
+    const graph = buildEventGraph(events, 'ETHUSDT', '15m', { maxBarGap: 5 });
 
     // fvg(10) → liquidity_sweep(12): gap=2 ✓
     // fvg(10) → mss(14): gap=4 ✓
@@ -61,7 +61,7 @@ describe('event-graph / buildEventGraph', () => {
       ['bos', [makeEvent('bos', 20)]], // gap=10, exceeds default maxBarGap=3
     ]);
 
-    const graph = buildEventGraph(events, 'BTCUSDT', '15m');
+    const graph = buildEventGraph(events, 'ETHUSDT', '15m');
     expect(graph.edges.length).toBe(0);
   });
 
@@ -71,7 +71,7 @@ describe('event-graph / buildEventGraph', () => {
       ['bos', [makeEvent('bos', 12, 'bearish')]],
     ]);
 
-    const graph = buildEventGraph(events, 'BTCUSDT', '15m', {
+    const graph = buildEventGraph(events, 'ETHUSDT', '15m', {
       maxBarGap: 5,
       requireDirectionMatch: true,
     });
@@ -87,7 +87,7 @@ describe('event-graph / discoverPatterns', () => {
       ['mss', [makeEvent('mss', 12)]],
     ]);
 
-    const graph = buildEventGraph(events, 'BTCUSDT', '15m', { maxBarGap: 5 });
+    const graph = buildEventGraph(events, 'ETHUSDT', '15m', { maxBarGap: 5 });
     const patterns = discoverPatterns(graph, 2, 2);
 
     expect(patterns.length).toBeGreaterThan(0);
@@ -103,7 +103,7 @@ describe('event-graph / discoverPatterns', () => {
       ['mss', [makeEvent('mss', 12), makeEvent('mss', 22)]],
     ]);
 
-    const graph = buildEventGraph(events, 'BTCUSDT', '15m', { maxBarGap: 5 });
+    const graph = buildEventGraph(events, 'ETHUSDT', '15m', { maxBarGap: 5 });
     const patterns = discoverPatterns(graph, 2, 3);
 
     // Should find "fvg→liquidity_sweep→mss" with support=2.

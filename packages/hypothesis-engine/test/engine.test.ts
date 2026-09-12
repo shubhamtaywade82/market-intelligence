@@ -46,7 +46,7 @@ describe('hypothesis-engine / testHypothesis', () => {
     const hypothesis: Hypothesis = {
       id: 'h1',
       description: 'Test FVG edge',
-      symbol: 'BTCUSDT',
+      symbol: 'ETHUSDT',
       timeframe: '15m',
       eventType: 'fvg',
     };
@@ -83,7 +83,7 @@ describe('hypothesis-engine / testHypothesis', () => {
     const hypothesis: Hypothesis = {
       id: 'h3',
       description: 'FVG in bullish trend',
-      symbol: 'BTCUSDT',
+      symbol: 'ETHUSDT',
       timeframe: '15m',
       eventType: 'fvg',
       regimeFilter: { trend: 'bullish' },
@@ -97,7 +97,7 @@ describe('hypothesis-engine / testHypothesis', () => {
     const hypothesis: Hypothesis = {
       id: 'h4',
       description: 'FVG with OOS validation',
-      symbol: 'BTCUSDT',
+      symbol: 'ETHUSDT',
       timeframe: '15m',
       eventType: 'fvg',
     };
@@ -120,7 +120,7 @@ describe('hypothesis-engine / testHypothesis', () => {
     const hypothesis: Hypothesis = {
       id: 'h5',
       description: 'FVG JSON test',
-      symbol: 'BTCUSDT',
+      symbol: 'ETHUSDT',
       timeframe: '15m',
       eventType: 'fvg',
     };

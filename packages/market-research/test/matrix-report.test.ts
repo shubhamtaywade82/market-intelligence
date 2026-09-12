@@ -6,7 +6,7 @@ describe('Effectiveness Matrix Reporting', () => {
   it('aggregates multi-timeframe study results and formats markdown report', () => {
     const mockStudies: ComponentStudyResult[] = [
       {
-        symbol: 'BTCUSDT',
+        symbol: 'ETHUSDT',
         timeframe: '5m',
         eventType: 'fvg',
         sampleSize: 1200,
@@ -21,7 +21,7 @@ describe('Effectiveness Matrix Reporting', () => {
         baselineComparisonR2: { baselineProbability: 0.40, uplift: 0.07, isStatisticallySignificant: true, pValueEstimate: 0.001 }
       },
       {
-        symbol: 'BTCUSDT',
+        symbol: 'ETHUSDT',
         timeframe: '15m',
         eventType: 'fvg',
         sampleSize: 650,
@@ -37,12 +37,12 @@ describe('Effectiveness Matrix Reporting', () => {
       }
     ];
 
-    const matrix = buildEffectivenessMatrix('BTCUSDT', mockStudies);
+    const matrix = buildEffectivenessMatrix('ETHUSDT', mockStudies);
     expect(matrix.rows).toHaveLength(1);
     expect(matrix.rows[0]!.component).toBe('fvg');
 
     const markdown = formatMatrixMarkdown(matrix, ['5m', '15m']);
-    expect(markdown).toContain('# Effectiveness Matrix: BTCUSDT');
+    expect(markdown).toContain('# Effectiveness Matrix: ETHUSDT');
     expect(markdown).toContain('47.0%* [44-50%] (1.4 ATR, +7.0pp, n=1200)');
     expect(markdown).toContain('54.0%* [50-58%] (1.8 ATR, +14.0pp, n=650)');
   });

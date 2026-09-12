@@ -33,7 +33,7 @@ describe('strategy-discovery / discoverStrategies', () => {
     const candles = makeCandles(300);
     const candidates = discoverStrategies({
       candles,
-      symbol: 'BTCUSDT',
+      symbol: 'ETHUSDT',
       timeframe: '15m',
       eventTypes: ['fvg', 'bos', 'displacement'],
       horizonCandles: 24,
@@ -55,7 +55,7 @@ describe('strategy-discovery / discoverStrategies', () => {
     const candles = makeCandles(300);
     const candidates = discoverStrategies({
       candles,
-      symbol: 'BTCUSDT',
+      symbol: 'ETHUSDT',
       timeframe: '15m',
       eventTypes: ['fvg'],
       regimeFilters: [{ trend: 'bullish' }, { trend: 'bearish' }],
@@ -72,7 +72,7 @@ describe('strategy-discovery / discoverStrategies', () => {
     const candles = makeCandles(400);
     const candidates = discoverStrategies({
       candles,
-      symbol: 'BTCUSDT',
+      symbol: 'ETHUSDT',
       timeframe: '15m',
       eventTypes: ['fvg', 'bos', 'choch', 'mss', 'displacement'],
     });
@@ -88,7 +88,7 @@ describe('strategy-discovery / discoverStrategies', () => {
     const candles = makeCandles(300);
     const candidates = discoverStrategies({
       candles,
-      symbol: 'BTCUSDT',
+      symbol: 'ETHUSDT',
       timeframe: '15m',
       eventTypes: ['fvg'],
     });

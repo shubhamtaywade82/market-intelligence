@@ -33,14 +33,14 @@ describe('negative-evidence-system / computeEvidenceBalance', () => {
     const candles = makeCandles(300);
     const balance = computeEvidenceBalance({
       candles,
-      symbol: 'BTCUSDT',
+      symbol: 'ETHUSDT',
       timeframe: '15m',
       eventType: 'fvg',
       htf: '1h',
     });
 
     expect(balance.strategy).toContain('fvg');
-    expect(balance.symbol).toBe('BTCUSDT');
+    expect(balance.symbol).toBe('ETHUSDT');
     expect(Array.isArray(balance.positiveEvidence)).toBe(true);
     expect(Array.isArray(balance.negativeEvidence)).toBe(true);
     expect(typeof balance.netScore).toBe('number');
@@ -51,7 +51,7 @@ describe('negative-evidence-system / computeEvidenceBalance', () => {
     const candles = makeCandles(300);
     const balance = computeEvidenceBalance({
       candles,
-      symbol: 'BTCUSDT',
+      symbol: 'ETHUSDT',
       timeframe: '15m',
       eventType: 'fvg',
     });
@@ -68,7 +68,7 @@ describe('negative-evidence-system / computeEvidenceBalance', () => {
     const candles = makeCandles(300);
     const balance = computeEvidenceBalance({
       candles,
-      symbol: 'BTCUSDT',
+      symbol: 'ETHUSDT',
       timeframe: '15m',
       eventType: 'fvg',
     });

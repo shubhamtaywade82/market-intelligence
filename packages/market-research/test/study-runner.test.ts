@@ -28,7 +28,7 @@ describe('Study Runner & Context Features', () => {
     ];
 
     const study = runFvgStudy(candles, {
-      symbol: 'BTCUSDT',
+      symbol: 'ETHUSDT',
       timeframe: '15m',
       horizonCandles: 3
     });
@@ -50,7 +50,7 @@ describe('Study Runner & Context Features', () => {
     ];
 
     const swings = detectSwings(candles, { leftBars: 1, rightBars: 1 });
-    const breaks = detectStructureBreaks(candles, swings, { symbol: 'BTCUSDT', timeframe: '15m' });
+    const breaks = detectStructureBreaks(candles, swings, { symbol: 'ETHUSDT', timeframe: '15m' });
     const context = extractContextFeatures(candles, 3, swings, breaks);
 
     expect(context.displacementAtr.toNumber()).toBeGreaterThan(1);
@@ -68,7 +68,7 @@ describe('Study Runner & Context Features', () => {
     ];
 
     const study = runObservationStudy(candles, {
-      symbol: 'BTCUSDT',
+      symbol: 'ETHUSDT',
       timeframe: '15m',
       horizonCandles: 3
     });
@@ -83,7 +83,7 @@ describe('Study Runner & Context Features', () => {
     expect(firstObs.outcome.targetHitR).toBeDefined();
     expect(firstObs.outcome.label?.startIndex).toBe(firstObs.event.availableAtIndex);
     expect(firstObs.outcome.label?.endIndex).toBeGreaterThanOrEqual(firstObs.outcome.label!.startIndex);
-    expect(firstObs.provenance.datasetId).toBe('BTCUSDT-15m');
+    expect(firstObs.provenance.datasetId).toBe('ETHUSDT-15m');
     expect(firstObs.provenance.datasetHash).toHaveLength(64);
     expect(firstObs.provenance.detectorConfigHash).toHaveLength(16);
     expect(firstObs.provenance.outcomeConfigHash).toHaveLength(16);
@@ -100,18 +100,18 @@ describe('Study Runner & Context Features', () => {
       makeCandle(5000, 115, 135, 114, 134)
     ];
 
-    const study = runObservationStudy(candles, { symbol: 'BTCUSDT', timeframe: '15m' });
+    const study = runObservationStudy(candles, { symbol: 'ETHUSDT', timeframe: '15m' });
     const fvgRes = study.results.find(r => r.eventType === 'fvg')!;
     const provenance = study.observations[0]!.provenance;
 
     const researchResult = toResearchResult(fvgRes, candles.length, provenance);
 
-    expect(researchResult.population.symbol).toBe('BTCUSDT');
+    expect(researchResult.population.symbol).toBe('ETHUSDT');
     expect(researchResult.population.candleCount).toBe(5);
     expect(researchResult.sample.eventType).toBe('fvg');
     expect(researchResult.descriptive.reachRates).toBeDefined();
     expect(researchResult.descriptive.hitRates).toBeDefined();
-    expect(researchResult.provenance.datasetId).toBe('BTCUSDT-15m');
+    expect(researchResult.provenance.datasetId).toBe('ETHUSDT-15m');
     expect(researchResult.dependence.pValueEstimate).toBeDefined();
     expect(researchResult.evidenceStatus).toBe('insufficient_sample');
   });
@@ -125,7 +125,7 @@ describe('Study Runner & Context Features', () => {
       makeCandle(5000, 115, 135, 114, 134)
     ];
 
-    const study = runObservationStudy(candles, { symbol: 'BTCUSDT', timeframe: '15m' });
+    const study = runObservationStudy(candles, { symbol: 'ETHUSDT', timeframe: '15m' });
     expect(study.multipleTesting).toBeDefined();
     expect(study.multipleTesting!.procedure).toBe('benjamini_hochberg');
     expect(study.multipleTesting!.alpha).toBe(0.05);
@@ -151,7 +151,7 @@ describe('Study Runner & Context Features', () => {
     const delayedEvent: BaseEvent = {
       id: 'delayed-1',
       type: 'control',
-      symbol: 'BTCUSDT',
+      symbol: 'ETHUSDT',
       timeframe: '15m',
       detectedAt: 3000,
       originIndex: 1,

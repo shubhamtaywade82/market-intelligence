@@ -37,7 +37,7 @@ function makeState(
 describe('market-state / aggregateMarketState', () => {
   it('computes market breadth across multiple symbols', () => {
     const streams = new Map<string, StreamMarketState>([
-      ['BTCUSDT:15m', makeState('BTCUSDT', 'bullish', 3)],
+      ['ETHUSDT:15m', makeState('ETHUSDT', 'bullish', 3)],
       ['ETHUSDT:15m', makeState('ETHUSDT', 'bullish', 1)],
       ['SOLUSDT:15m', makeState('SOLUSDT', 'bearish', 2)],
       ['XRPUSDT:15m', makeState('XRPUSDT', 'range', 0)],
@@ -54,7 +54,7 @@ describe('market-state / aggregateMarketState', () => {
 
   it('collects all events across streams, sorted newest-first', () => {
     const streams = new Map<string, StreamMarketState>([
-      ['BTCUSDT:15m', makeState('BTCUSDT', 'bullish', 2)],
+      ['ETHUSDT:15m', makeState('ETHUSDT', 'bullish', 2)],
       ['ETHUSDT:15m', makeState('ETHUSDT', 'bearish', 1)],
     ]);
 
@@ -73,7 +73,7 @@ describe('market-state / aggregateMarketState', () => {
 
   it('ranks hot symbols by event count', () => {
     const streams = new Map<string, StreamMarketState>([
-      ['BTCUSDT:15m', makeState('BTCUSDT', 'bullish', 5)],
+      ['ETHUSDT:15m', makeState('ETHUSDT', 'bullish', 5)],
       ['ETHUSDT:15m', makeState('ETHUSDT', 'bullish', 3)],
       ['SOLUSDT:15m', makeState('SOLUSDT', 'bearish', 8)],
       ['XRPUSDT:15m', makeState('XRPUSDT', 'range', 0)],
@@ -84,7 +84,7 @@ describe('market-state / aggregateMarketState', () => {
     expect(agg.hotSymbols.length).toBe(2);
     expect(agg.hotSymbols[0]!.symbol).toBe('SOLUSDT');
     expect(agg.hotSymbols[0]!.eventCount).toBe(8);
-    expect(agg.hotSymbols[1]!.symbol).toBe('BTCUSDT');
+    expect(agg.hotSymbols[1]!.symbol).toBe('ETHUSDT');
   });
 
   it('handles empty input', () => {
@@ -97,7 +97,7 @@ describe('market-state / aggregateMarketState', () => {
 
   it('produces JSON-serializable output', () => {
     const streams = new Map<string, StreamMarketState>([
-      ['BTCUSDT:15m', makeState('BTCUSDT', 'bullish', 1)],
+      ['ETHUSDT:15m', makeState('ETHUSDT', 'bullish', 1)],
     ]);
     const agg = aggregateMarketState(streams);
     const json = JSON.stringify(agg);

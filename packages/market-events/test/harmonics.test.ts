@@ -17,7 +17,7 @@ describe('Harmonic Patterns Engine', () => {
       { id: 'd', type: 'low', index: 30, timestamp: 5000, price: new Decimal(121.4), confirmedAtIndex: 32 }
     ];
 
-    const harmonics = detectHarmonicPatterns(swings, { symbol: 'BTCUSDT', timeframe: '1h' });
+    const harmonics = detectHarmonicPatterns(swings, { symbol: 'ETHUSDT', timeframe: '1h' });
     expect(harmonics).toHaveLength(1);
     const h = harmonics[0]!;
     expect(h.type).toBe('harmonic_pattern');
