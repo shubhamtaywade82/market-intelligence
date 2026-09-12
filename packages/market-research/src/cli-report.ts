@@ -3,6 +3,7 @@ import { runUniversalStudy } from './study-runner.js';
 import { buildEffectivenessMatrix, formatMatrixMarkdown, type EffectivenessMatrixReport, type TimeframeCell } from './matrix-report.js';
 import { runWalkForwardValidation, formatStabilityMarkdown, type StabilitySummary } from './walk-forward.js';
 import { DEFAULT_RESEARCH_CANDLE_COUNT } from './cli-market-data.js';
+import type { BinanceKlineMarket } from './kline-market.js';
 
 export const DEFAULT_TIMEFRAMES: Timeframe[] = ['5m', '15m', '1h', '4h'];
 export const DEFAULT_HORIZON_CANDLES = 24;
@@ -13,6 +14,7 @@ export type ResearchCliOptions = {
   candleCount?: number;
   endTime?: number;
   format?: 'auto' | 'terminal' | 'markdown';
+  klineMarket?: BinanceKlineMarket;
 };
 
 function walkForwardSizing(candleCount: number): {
@@ -46,8 +48,10 @@ export function formatResearchProvenance(
       return `${tf}: ${n} bars (${range})`;
     })
     .join(' · ');
+  const market = options.klineMarket ?? 'usdm_futures';
+  const marketLabel = market === 'usdm_futures' ? 'Binance USDⓈ-M futures REST klines' : 'Binance spot REST klines';
   return [
-    `*Data source: Binance spot REST klines · symbol ${symbol} · lookback ~${candleCount} bars per TF · as-of ${endIso}*`,
+    `*Data source: ${marketLabel} · symbol ${symbol} · lookback ~${candleCount} bars per TF · as-of ${endIso}*`,
     `*Series: ${tfSummary}*`
   ].join('\n');
 }

@@ -1,4 +1,9 @@
-import { createBinanceAdapter } from '@nemesis-oss/market-data';
+import {
+  createResearchBinanceAdapter,
+  datasetCacheFilename,
+  resolveResearchKlineMarket,
+  type BinanceKlineMarket,
+} from './kline-market.js';
 import type { Candle, Timeframe } from '@nemesis-oss/market-events';
 import { timeframeToMs } from './multi-timeframe.js';
 
@@ -8,6 +13,7 @@ export const MIN_RESEARCH_CANDLE_COUNT = 320;
 export type ResearchMarketDataOptions = {
   readonly endTime?: number;
   readonly candleCount?: number;
+  readonly klineMarket?: BinanceKlineMarket;
 };
 
 export type ResearchCandleLoader = (
@@ -33,6 +39,7 @@ export async function fetchBinanceCandlesByTimeframe(
 ): Promise<Partial<Record<Timeframe, readonly Candle[]>>> {
   const endTime = options.endTime ?? Date.now();
   const candleCount = options.candleCount ?? DEFAULT_RESEARCH_CANDLE_COUNT;
+  const market = options.klineMarket ?? resolveResearchKlineMarket();
   if (candleCount < MIN_RESEARCH_CANDLE_COUNT) {
     throw new Error(
       `--lookback must be at least ${MIN_RESEARCH_CANDLE_COUNT} candles (got ${candleCount})`
@@ -42,7 +49,9 @@ export async function fetchBinanceCandlesByTimeframe(
   const byTimeframe: Partial<Record<Timeframe, readonly Candle[]>> = {};
   for (const timeframe of timeframes) {
     const window = historyWindow(timeframe, candleCount, endTime);
-    const candles = await loadCandles(symbol, timeframe, window);
+    const candles = loadCandles === defaultBinanceCandleLoader
+      ? await defaultBinanceCandleLoader(symbol, timeframe, window, market)
+      : await loadCandles(symbol, timeframe, window);
     if (candles.length < MIN_RESEARCH_CANDLE_COUNT) {
       throw new Error(
         `Insufficient ${timeframe} Binance data for ${symbol}: ${candles.length} candles (need ${MIN_RESEARCH_CANDLE_COUNT}+)`
@@ -56,9 +65,10 @@ export async function fetchBinanceCandlesByTimeframe(
 export async function defaultBinanceCandleLoader(
   symbol: string,
   timeframe: Timeframe,
-  window: { startTime: number; endTime: number }
+  window: { startTime: number; endTime: number },
+  market: BinanceKlineMarket = resolveResearchKlineMarket()
 ): Promise<readonly Candle[]> {
-  const adapter = createBinanceAdapter();
+  const adapter = createResearchBinanceAdapter(market);
   return adapter.fetchKlines({
     symbol,
     timeframe,

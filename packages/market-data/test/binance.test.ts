@@ -85,6 +85,29 @@ describe('market-data / BinanceRestAdapter', () => {
     expect(candles[1]!.timestamp).toBeLessThan(candles[2]!.timestamp);
   });
 
+  it('fetchKlines uses USD-M futures endpoint when klineMarket is usdm_futures', async () => {
+    spy = mockHttpGetJson({
+      '/fapi/v1/klines?symbol=BTCUSDT&interval=15m&startTime=1000&endTime=5000&limit=1500': [
+        rawKline(1000, '100', '102', '99', '101', '10', 1099),
+      ],
+    });
+
+    const adapter = new BinanceRestAdapter({
+      spotRestBaseUrl: 'https://mock-spot',
+      futuresRestBaseUrl: 'https://mock-fapi',
+      klineMarket: 'usdm_futures',
+    });
+    const candles = await adapter.fetchKlines({
+      symbol: 'BTCUSDT',
+      timeframe: '15m',
+      startTime: 1000,
+      endTime: 5000,
+    });
+
+    expect(candles.length).toBe(1);
+    expect(spy).toHaveBeenCalled();
+  });
+
   it('deduplicates candles with the same timestamp across pages', async () => {
     spy = mockHttpGetJson({
       '/api/v3/klines?symbol=ETHUSDT&interval=1m&startTime=0&endTime=10000&limit=2': [

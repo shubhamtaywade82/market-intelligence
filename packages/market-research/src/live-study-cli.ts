@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Timeframe } from '@nemesis-oss/market-events';
+import { resolveResearchKlineMarket, type BinanceKlineMarket } from './kline-market.js';
 import { runLiveMarketStudy } from './live-study.js';
 
 const VALID_TIMEFRAMES = new Set<Timeframe>([
@@ -31,6 +32,7 @@ function parseArgs(args: readonly string[]): {
   dataDir: string;
   refresh: boolean;
   format?: 'auto' | 'terminal' | 'markdown';
+  klineMarket: BinanceKlineMarket;
 } {
   const symbol = readFlagValue(args, '--symbol') ?? 'BTCUSDT';
   const tfRaw = readFlagValue(args, '--timeframe') ?? '15m';
@@ -50,6 +52,8 @@ function parseArgs(args: readonly string[]): {
   const dataDir = readFlagValue(args, '--data-dir') ?? path.join(process.cwd(), '.datasets');
   const refresh = args.includes('--refresh');
   const format = parseFormatArg(args);
+  const marketRaw = readFlagValue(args, '--market');
+  const klineMarket = resolveResearchKlineMarket(marketRaw);
   return {
     symbol,
     timeframe: tfRaw as Timeframe,
@@ -57,6 +61,7 @@ function parseArgs(args: readonly string[]): {
     horizon,
     dataDir,
     refresh,
+    klineMarket,
     ...(format !== undefined ? { format } : {})
   };
 }
@@ -78,6 +83,7 @@ if (isMainModule()) {
       horizonCandles: parsed.horizon,
       dataDir: parsed.dataDir,
       useCache: !parsed.refresh,
+      klineMarket: parsed.klineMarket,
       ...(parsed.format !== undefined ? { format: parsed.format } : {})
     });
     process.stdout.write(`${output}\n`);

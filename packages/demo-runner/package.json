@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "milestone": "tsx src/milestone-question.ts",
+    "fvg-signal": "tsx src/fvg-signal-demo.ts",
     "api": "tsx src/api-server.ts",
     "tui": "tsx src/tui.tsx"
   },

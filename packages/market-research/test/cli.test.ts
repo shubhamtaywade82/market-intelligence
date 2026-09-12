@@ -42,7 +42,7 @@ describe('Research CLI Runner', () => {
       })
     );
     expect(report).toContain('# Effectiveness Matrix: ETHUSDT');
-    expect(report).toContain('Binance spot REST klines');
+    expect(report).toContain('Binance USDⓈ-M futures REST klines');
     expect(report).toContain('| Component |');
     expect(report).toContain('FVG');
     expect(report).toContain('5m');

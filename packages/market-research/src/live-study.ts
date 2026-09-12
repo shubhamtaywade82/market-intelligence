@@ -1,7 +1,12 @@
 import path from 'node:path';
-import { createBinanceAdapter } from '@nemesis-oss/market-data';
 import type { Candle, Timeframe } from '@nemesis-oss/market-events';
 import { loadDataset, saveDataset } from './data/dataset-store.js';
+import {
+  createResearchBinanceAdapter,
+  datasetCacheFilename,
+  resolveResearchKlineMarket,
+  type BinanceKlineMarket,
+} from './kline-market.js';
 import { buildEffectivenessMatrix, formatMatrixMarkdown } from './matrix-report.js';
 import { runObservationStudy } from './study-runner.js';
 import { formatStabilityMarkdown, runWalkForwardValidation } from './walk-forward.js';
@@ -13,6 +18,7 @@ export interface LiveStudyFromCandlesOptions {
   readonly horizonCandles?: number | undefined;
   readonly datasetPath?: string | undefined;
   readonly format?: 'auto' | 'terminal' | 'markdown' | undefined;
+  readonly klineMarket?: BinanceKlineMarket | undefined;
 }
 
 export interface LiveStudyOptions extends LiveStudyFromCandlesOptions {
@@ -24,11 +30,12 @@ export interface LiveStudyOptions extends LiveStudyFromCandlesOptions {
 async function fetchCandles(
   symbol: string,
   timeframe: Timeframe,
-  days: number
+  days: number,
+  market: BinanceKlineMarket
 ): Promise<Candle[]> {
   const endTime = Date.now();
   const startTime = endTime - days * 24 * 60 * 60 * 1000;
-  const adapter = createBinanceAdapter();
+  const adapter = createResearchBinanceAdapter(market);
   const fetched = await adapter.fetchKlines({ symbol, timeframe, startTime, endTime });
   return [...fetched];
 }
@@ -80,6 +87,7 @@ export function runLiveStudyFromCandles(
   const lines = [
     `# Live study: ${options.symbol} ${options.timeframe}`,
     `Candles: ${candles.length}`,
+    ...(options.klineMarket ? [`Kline market: ${options.klineMarket}`] : []),
     ...(options.datasetPath ? [`Dataset: ${options.datasetPath}`] : []),
     '',
     matrixStr,
@@ -99,21 +107,22 @@ export async function runLiveMarketStudy(options: LiveStudyOptions = {
   const symbol = options.symbol;
   const timeframe = options.timeframe;
   const days = options.days ?? 30;
+  const market = options.klineMarket ?? resolveResearchKlineMarket();
   const dataDir = options.dataDir ?? path.join(process.cwd(), '.datasets');
   const useCache = options.useCache ?? true;
-  const cachePath = path.join(dataDir, `${symbol.toUpperCase()}-${timeframe}.json`);
+  const cachePath = path.join(dataDir, datasetCacheFilename(symbol, timeframe, market));
 
   let candles: Candle[];
   if (useCache) {
     try {
       candles = (await loadDataset(cachePath)).candles;
     } catch {
-      candles = await fetchCandles(symbol, timeframe, days);
-      await saveDataset(dataDir, symbol, timeframe, candles);
+      candles = await fetchCandles(symbol, timeframe, days, market);
+      await saveDataset(dataDir, symbol, timeframe, candles, market === 'usdm_futures' ? 'usdm' : 'spot');
     }
   } else {
-    candles = await fetchCandles(symbol, timeframe, days);
-    await saveDataset(dataDir, symbol, timeframe, candles);
+    candles = await fetchCandles(symbol, timeframe, days, market);
+    await saveDataset(dataDir, symbol, timeframe, candles, market === 'usdm_futures' ? 'usdm' : 'spot');
   }
 
   return runLiveStudyFromCandles(candles, {
@@ -121,6 +130,7 @@ export async function runLiveMarketStudy(options: LiveStudyOptions = {
     timeframe,
     horizonCandles: options.horizonCandles,
     datasetPath: cachePath,
-    format: options.format
+    format: options.format,
+    klineMarket: market
   });
 }

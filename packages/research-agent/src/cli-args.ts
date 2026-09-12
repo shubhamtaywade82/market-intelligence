@@ -1,4 +1,5 @@
 import type { Timeframe } from '@nemesis-oss/market-events';
+import { resolveResearchKlineMarket } from '@nemesis-oss/market-research';
 
 const VALID_TIMEFRAMES = new Set<Timeframe>([
   '1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '1w', '1M',
@@ -18,6 +19,7 @@ export interface ResearchCliArgs {
   readonly model?: string | undefined;
   readonly skipPreflight: boolean;
   readonly checkOnly: boolean;
+  readonly klineMarket: import('@nemesis-oss/market-research').BinanceKlineMarket;
 }
 
 function readFlagValue(args: readonly string[], flag: string): string | undefined {
@@ -43,7 +45,7 @@ function collectQuestionText(args: readonly string[]): string | undefined {
   if (qFlag) return qFlag;
 
   const flagsWithValues = new Set([
-    '--symbol', '--timeframe', '--days', '--dataset', '--htf', '--ollama', '--model', '--question',
+    '--symbol', '--timeframe', '--days', '--dataset', '--htf', '--ollama', '--model', '--question', '--market',
   ]);
   const positional: string[] = [];
   for (let i = 0; i < args.length; i++) {
@@ -79,7 +81,8 @@ export function parseResearchAgentCliArgs(args: readonly string[]): ResearchCliA
     ollamaBaseUrl: readFlagValue(args, '--ollama'),
     model: readFlagValue(args, '--model'),
     skipPreflight: args.includes('--skip-ollama-check'),
-    checkOnly: args.includes('--check-ollama'),
+    checkOnly: args.includes('--check-ollama') || args.includes('--check-only'),
+    klineMarket: resolveResearchKlineMarket(readFlagValue(args, '--market')),
   };
 }
 
@@ -95,7 +98,7 @@ Options:
   --htf 1h,4h           Optional higher timeframes for HTF context tools
   --ollama URL          Ollama base URL (default: OLLAMA_BASE_URL or localhost:11434)
   --model NAME          Ollama model tag (default: RESEARCH_AGENT_MODEL or openbmb/minicpm5-2b)
-  --check-ollama        Verify Ollama + model, then exit
+  --market spot|futures   Kline source (default: usdm futures / RESEARCH_KLINE_MARKET)
   --skip-ollama-check   Run without preflight (not recommended)
   -h, --help            Show this help
 `;

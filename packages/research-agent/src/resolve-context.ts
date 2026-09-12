@@ -1,7 +1,6 @@
 import path from 'node:path';
 import { access } from 'node:fs/promises';
-import { createBinanceAdapter } from '@nemesis-oss/market-data';
-import { loadDataset } from '@nemesis-oss/market-research';
+import { createResearchBinanceAdapter, loadDataset, resolveResearchKlineMarket } from '@nemesis-oss/market-research';
 import type { ResearchContext } from './context.js';
 import { buildResearchContextFromExchange } from './exchange.js';
 import type { ResearchCliArgs } from './cli-args.js';
@@ -39,7 +38,7 @@ export async function resolveResearchContext(args: ResearchCliArgs): Promise<Res
   const htfTimeframes = args.htfTimeframes.length > 0 ? args.htfTimeframes : undefined;
 
   return buildResearchContextFromExchange({
-    adapter: createBinanceAdapter(),
+    adapter: createResearchBinanceAdapter(args.klineMarket ?? resolveResearchKlineMarket()),
     symbol: args.symbol,
     timeframe: args.timeframe,
     startTime,

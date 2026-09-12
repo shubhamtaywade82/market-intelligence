@@ -8,10 +8,11 @@ export {
   BINANCE_WS_FUTURES,
   BinanceRestAdapter,
   type BinanceAdapterConfig,
+  type BinanceKlineMarket,
 } from './binance/rest.js';
 
 export { BinanceKlineStream, subscribeBinanceKlines, type BinanceWsConfig } from './binance/ws.js';
-export { BinanceAdapter, createBinanceAdapter } from './binance/adapter.js';
+export { BinanceAdapter, createBinanceAdapter, createBinanceFuturesAdapter } from './binance/adapter.js';
 
 export {
   BYBIT_INTERVAL_MAP,

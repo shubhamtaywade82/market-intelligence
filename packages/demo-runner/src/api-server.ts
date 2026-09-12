@@ -47,7 +47,7 @@ function createMockAdapter(): {
   adapter: ExchangeAdapter;
   startStreaming: () => void;
 } {
-  const handlers = new Map<string, { onCandle: (c: Candle) => void; onStatus?: (s: string) => void }>();
+  const handlers = new Map<string, { onCandle: (c: Candle) => void; onStatus?: ((s: StreamStatus) => void) | undefined }>();
   const key = (s: string, tf: Timeframe) => `${s}:${tf}`;
 
   const adapter: ExchangeAdapter = {

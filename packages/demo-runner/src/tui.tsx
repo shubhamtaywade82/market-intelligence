@@ -1,163 +1,192 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { render, Box, Text, useInput, useApp } from 'ink';
 import { Select } from '@inkui-cli/select';
 import { Spinner } from '@inkui-cli/spinner';
 import { darkTheme } from '@inkui-cli/core';
 import { runResearchCli, runLiveMarketStudy } from '@nemesis-oss/market-research';
 import { runResearchAgentCli } from '@nemesis-oss/market-research-agent';
+import {
+  runAlphaLeaderboard,
+  runConfluenceAnalysis,
+  runNegativeEvidenceAnalysis
+} from './evidence-analysis.js';
 
-type ViewMode = 'menu' | 'loading' | 'result' | 'error';
+type ViewMode = 'symbol' | 'action' | 'loading' | 'result' | 'error';
 
-interface MenuOption {
+interface OptionItem {
   readonly label: string;
   readonly value: string;
-  readonly description: string;
 }
 
-const MENU_OPTIONS: readonly MenuOption[] = [
-  {
-    label: '1. BTCUSDT Multi-Timeframe Matrix (15m, 1h, 4h)',
-    value: 'btc-mtf',
-    description: 'Empirical event edge (+2R hit rates, 95% CI, MFE) & walk-forward stability on BTC'
-  },
-  {
-    label: '2. ETHUSDT Multi-Timeframe Matrix (15m, 1h, 4h)',
-    value: 'eth-mtf',
-    description: 'Empirical event edge (+2R hit rates, 95% CI, MFE) & walk-forward stability on ETH'
-  },
-  {
-    label: '3. SOLUSDT Multi-Timeframe Matrix (15m, 1h, 4h)',
-    value: 'sol-mtf',
-    description: 'Empirical event edge (+2R hit rates, 95% CI, MFE) & walk-forward stability on SOL'
-  },
-  {
-    label: '4. BTCUSDT Live Market Study (15m, 7 Days)',
-    value: 'btc-live-7d',
-    description: 'Live Binance 15m klines with rolling out-of-sample walk-forward validation'
-  },
-  {
-    label: '5. ETHUSDT Live Market Study (15m, 7 Days)',
-    value: 'eth-live-7d',
-    description: 'Live Binance 15m klines with rolling out-of-sample walk-forward validation'
-  },
-  {
-    label: '6. SOLUSDT Live Market Study (15m, 7 Days)',
-    value: 'sol-live-7d',
-    description: 'Live Binance 15m klines with rolling out-of-sample walk-forward validation'
-  },
-  {
-    label: '7. [Agent] Preflight Check (Ollama status & models)',
-    value: 'agent-preflight',
-    description: 'Verify local Ollama connectivity and model availability'
-  },
-  {
-    label: '8. [Agent] Research: FVG Edge & FDR Significance (BTCUSDT)',
-    value: 'agent-fvg-edge',
-    description: 'LLM ReAct loop with deterministic tools for FVG continuation hypothesis'
-  },
-  {
-    label: '9. [Agent] Research: HTF Conflict Evidence Degradation (SOLUSDT)',
-    value: 'agent-htf-conflict',
-    description: 'LLM ReAct loop evaluating negative evidence balance on SOL 15m vs 1h'
-  },
-  {
-    label: '10. Exit',
-    value: 'exit',
-    description: 'Close interactive TUI'
-  }
+const SYMBOL_OPTIONS: readonly OptionItem[] = [
+  { label: 'BTCUSDT (Bitcoin)', value: 'BTCUSDT' },
+  { label: 'ETHUSDT (Ethereum)', value: 'ETHUSDT' },
+  { label: 'SOLUSDT (Solana)', value: 'SOLUSDT' },
+  { label: 'BNBUSDT (Binance Coin)', value: 'BNBUSDT' },
+  { label: 'DOGEUSDT (Dogecoin)', value: 'DOGEUSDT' },
+  { label: 'Exit', value: 'exit' }
 ];
 
-async function executeAction(action: string): Promise<string> {
+const getActionOptions = (symbol: string): readonly OptionItem[] => [
+  { label: `1. Universal Effectiveness Matrix (${symbol} 15m, 1h, 4h)`, value: 'mtf-matrix' },
+  { label: `2. Component Alpha Leaderboard (All 8 Components ranked)`, value: 'leaderboard' },
+  { label: `3. Multi-Component Confluence & Synergy (Pairwise Uplifts)`, value: 'confluence' },
+  { label: `4. Negative Evidence & Conflict Impact (HTF Trend vs 15m)`, value: 'negative-evidence' },
+  { label: `5. Autonomous Research Agent: Full Strategy Synthesis (LLM)`, value: 'agent-synthesis' },
+  { label: `6. Live Rolling Walk-Forward Study (7-Day Out-of-Sample)`, value: 'live-study' },
+  { label: '7. Back to Symbol Selection', value: 'change-symbol' },
+  { label: '8. Exit', value: 'exit' }
+];
+
+async function executeAgentAction(symbol: string): Promise<string> {
+  const synthesisPrompt = `Evaluate all causal market events (FVG, Order Block, Liquidity Sweep, BOS, CHOCH, Displacement, VSA) on ${symbol} 15m. Identify which components provide statistically significant +2R edge over matched controls with FDR correction. Then analyze key pairwise confluences (e.g. FVG + Liquidity Sweep, Order Block + BOS) and negative evidence (HTF trend conflict). Conclude with a clear synthesis: what can we use for positive results, and what should be filtered out?`;
+  return runResearchAgentCli({
+    question: synthesisPrompt,
+    symbol,
+    timeframe: '15m',
+    days: 7,
+    htfTimeframes: ['1h'],
+    checkOnly: false,
+    skipPreflight: false,
+    klineMarket: 'spot'
+  });
+}
+
+async function executeAction(action: string, symbol: string): Promise<string> {
   switch (action) {
-    case 'btc-mtf':
-      return runResearchCli('BTCUSDT', { timeframes: ['15m', '1h', '4h'], format: 'terminal' });
-    case 'eth-mtf':
-      return runResearchCli('ETHUSDT', { timeframes: ['15m', '1h', '4h'], format: 'terminal' });
-    case 'sol-mtf':
-      return runResearchCli('SOLUSDT', { timeframes: ['15m', '1h', '4h'], format: 'terminal' });
-    case 'btc-live-7d':
-      return runLiveMarketStudy({ symbol: 'BTCUSDT', timeframe: '15m', days: 7, format: 'terminal' });
-    case 'eth-live-7d':
-      return runLiveMarketStudy({ symbol: 'ETHUSDT', timeframe: '15m', days: 7, format: 'terminal' });
-    case 'sol-live-7d':
-      return runLiveMarketStudy({ symbol: 'SOLUSDT', timeframe: '15m', days: 7, format: 'terminal' });
-    case 'agent-preflight':
-      return runResearchAgentCli({
-        question: '',
-        symbol: 'BTCUSDT',
-        timeframe: '15m',
-        days: 7,
-        htfTimeframes: [],
-        checkOnly: true,
-        skipPreflight: false
-      });
-    case 'agent-fvg-edge':
-      return runResearchAgentCli({
-        question: 'Does bullish FVG continuation on BTCUSDT provide a statistically significant +2R edge over matched controls after FDR correction, and does walk-forward validation show stable out-of-sample performance?',
-        symbol: 'BTCUSDT',
-        timeframe: '15m',
-        days: 7,
-        htfTimeframes: ['1h'],
-        checkOnly: false,
-        skipPreflight: false
-      });
-    case 'agent-htf-conflict':
-      return runResearchAgentCli({
-        question: 'Measure the degradation in empirical hit rate caused by contradictory or negative evidence (HTF trend conflict) on SOLUSDT 15m vs 1h.',
-        symbol: 'SOLUSDT',
-        timeframe: '15m',
-        days: 7,
-        htfTimeframes: ['1h'],
-        checkOnly: false,
-        skipPreflight: false
-      });
+    case 'mtf-matrix':
+      return runResearchCli(symbol, { timeframes: ['15m', '1h', '4h'], format: 'terminal' });
+    case 'leaderboard':
+      return runAlphaLeaderboard(symbol, '15m');
+    case 'confluence':
+      return runConfluenceAnalysis(symbol, '15m');
+    case 'negative-evidence':
+      return runNegativeEvidenceAnalysis(symbol, '15m');
+    case 'live-study':
+      return runLiveMarketStudy({ symbol, timeframe: '15m', days: 7, format: 'terminal' });
+    case 'agent-synthesis':
+      return executeAgentAction(symbol);
     default:
       throw new Error(`Unknown action: ${action}`);
   }
 }
 
-const Header: React.FC = () => (
+const Header: React.FC<{ symbol?: string | undefined }> = ({ symbol }) => (
   <Box flexDirection="column" marginBottom={1} borderStyle="round" borderColor="cyan" paddingX={2} paddingY={1}>
     <Text bold color="cyan">
       ◆ Market Intelligence Interactive Terminal
     </Text>
     <Text color="gray">
-      Empirical market event research, counterfactual testing & walk-forward validation
+      Universal evidence discovery, multi-component confluence & autonomous agent
     </Text>
+    {symbol && (
+      <Box marginTop={1}>
+        <Text color="yellow">Selected Asset: </Text>
+        <Text bold color="white">{symbol}</Text>
+      </Box>
+    )}
   </Box>
 );
 
-interface ResultViewProps {
-  readonly content: string;
-}
-
-const ResultView: React.FC<ResultViewProps> = ({ content }) => (
+const ResultView: React.FC<{ content: string }> = ({ content }) => (
   <Box flexDirection="column">
     <Text>{content}</Text>
     <Box marginTop={1} borderStyle="single" borderColor="gray" paddingX={1}>
       <Text color="cyan">[r]</Text>
       <Text color="gray"> Rerun   </Text>
       <Text color="cyan">[m]</Text>
-      <Text color="gray"> Main Menu   </Text>
+      <Text color="gray"> Actions   </Text>
+      <Text color="cyan">[s]</Text>
+      <Text color="gray"> Change Symbol   </Text>
       <Text color="cyan">[q]</Text>
       <Text color="gray"> Quit</Text>
     </Box>
   </Box>
 );
 
+const SymbolSelection: React.FC<{
+  onSelect: (sym: string) => void;
+  onExit: () => void;
+}> = ({ onSelect, onExit }) => (
+  <Box flexDirection="column">
+    <Text color="yellow" bold>Select crypto asset for empirical research:</Text>
+    <Box marginTop={1}>
+      <Select
+        theme={darkTheme}
+        items={SYMBOL_OPTIONS.map(opt => ({ label: opt.label, value: opt.value }))}
+        onSelect={item => (item.value === 'exit' ? onExit() : onSelect(item.value))}
+      />
+    </Box>
+  </Box>
+);
+
+const ActionSelection: React.FC<{
+  symbol: string;
+  onSelect: (act: string) => void;
+  onBack: () => void;
+  onExit: () => void;
+}> = ({ symbol, onSelect, onBack, onExit }) => (
+  <Box flexDirection="column">
+    <Text color="yellow" bold>Select research action for {symbol}:</Text>
+    <Box marginTop={1}>
+      <Select
+        theme={darkTheme}
+        items={getActionOptions(symbol).map(opt => ({ label: opt.label, value: opt.value }))}
+        onSelect={item => {
+          if (item.value === 'exit') onExit();
+          else if (item.value === 'change-symbol') onBack();
+          else onSelect(item.value);
+        }}
+      />
+    </Box>
+  </Box>
+);
+
+const LoadingStatus: React.FC<{ action: string; symbol: string }> = ({ action, symbol }) => {
+  const isAgent = action.startsWith('agent');
+  return (
+    <Box flexDirection="column" marginY={1}>
+      <Spinner
+        type="dots"
+        label={
+          isAgent
+            ? `Research Agent evaluating components & confluences on ${symbol}...`
+            : `Computing empirical causal studies and metrics on ${symbol}...`
+        }
+        theme={darkTheme}
+      />
+      <Text color="gray">
+        {isAgent
+          ? 'ReAct cycle with No-Tools Guarantee (enforces empirical verification).'
+          : 'Computes MFE/MAE/R excursion metrics, matched baseline uplift, and interactions.'}
+      </Text>
+    </Box>
+  );
+};
+
+const ErrorStatus: React.FC<{ error: string }> = ({ error }) => (
+  <Box flexDirection="column" borderColor="red" borderStyle="round" padding={1}>
+    <Text color="red" bold>Study Execution Failed:</Text>
+    <Text color="white">{error}</Text>
+    <Box marginTop={1}>
+      <Text color="gray">Press [m] for actions, [s] for symbols, or [q] to exit.</Text>
+    </Box>
+  </Box>
+);
+
 export const App: React.FC = () => {
   const { exit } = useApp();
-  const [mode, setMode] = useState<ViewMode>('menu');
+  const [mode, setMode] = useState<ViewMode>('symbol');
+  const [selectedSymbol, setSelectedSymbol] = useState<string>('BTCUSDT');
   const [activeAction, setActiveAction] = useState<string>('');
   const [result, setResult] = useState<string>('');
   const [error, setError] = useState<string>('');
 
-  const runStudy = useCallback(async (action: string) => {
+  const runStudy = useCallback(async (action: string, symbol: string) => {
     setActiveAction(action);
     setMode('loading');
     try {
-      const output = await executeAction(action);
-      setResult(output);
+      setResult(await executeAction(action, symbol));
       setMode('result');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -166,67 +195,22 @@ export const App: React.FC = () => {
   }, []);
 
   useInput((input, key) => {
-    if (input === 'q' || (key.ctrl && input === 'c')) {
-      exit();
-      return;
-    }
+    if (input === 'q' || (key.ctrl && input === 'c')) exit();
     if (mode === 'result' || mode === 'error') {
-      if (input === 'm') setMode('menu');
-      if (input === 'r' && activeAction) runStudy(activeAction);
+      if (input === 'm') setMode('action');
+      if (input === 's') setMode('symbol');
+      if (input === 'r' && activeAction) runStudy(activeAction, selectedSymbol);
     }
   });
 
   return (
     <Box flexDirection="column" padding={1}>
-      <Header />
-      {mode === 'menu' && (
-        <Box flexDirection="column">
-          <Text color="yellow" bold>
-            Select a research study or live validation run:
-          </Text>
-          <Box marginTop={1}>
-            <Select
-              theme={darkTheme}
-              items={MENU_OPTIONS.map(opt => ({ label: opt.label, value: opt.value }))}
-              onSelect={item => {
-                if (item.value === 'exit') {
-                  exit();
-                } else {
-                  runStudy(item.value);
-                }
-              }}
-            />
-          </Box>
-        </Box>
-      )}
-      {mode === 'loading' && (
-        <Box flexDirection="column" marginY={1}>
-          <Spinner
-            type="dots"
-            label={
-              activeAction.startsWith('agent')
-                ? 'Research Agent is reasoning, dispatching tools, and synthesizing report...'
-                : 'Fetching Binance klines and running empirical research study...'
-            }
-            theme={darkTheme}
-          />
-          <Text color="gray">
-            {activeAction.startsWith('agent')
-              ? 'Multi-step ReAct loop with No-Tools Guarantee (enforces empirical verification).'
-              : 'Computes causal excursion metrics (MFE/MAE/R) and walk-forward stability.'}
-          </Text>
-        </Box>
-      )}
+      <Header symbol={mode !== 'symbol' ? selectedSymbol : undefined} />
+      {mode === 'symbol' && <SymbolSelection onSelect={sym => { setSelectedSymbol(sym); setMode('action'); }} onExit={exit} />}
+      {mode === 'action' && <ActionSelection symbol={selectedSymbol} onSelect={act => runStudy(act, selectedSymbol)} onBack={() => setMode('symbol')} onExit={exit} />}
+      {mode === 'loading' && <LoadingStatus action={activeAction} symbol={selectedSymbol} />}
       {mode === 'result' && <ResultView content={result} />}
-      {mode === 'error' && (
-        <Box flexDirection="column" borderColor="red" borderStyle="round" padding={1}>
-          <Text color="red" bold>Study Execution Failed:</Text>
-          <Text color="white">{error}</Text>
-          <Box marginTop={1}>
-            <Text color="gray">Press [m] for menu or [q] to exit.</Text>
-          </Box>
-        </Box>
-      )}
+      {mode === 'error' && <ErrorStatus error={error} />}
     </Box>
   );
 };

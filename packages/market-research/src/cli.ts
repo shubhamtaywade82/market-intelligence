@@ -7,6 +7,7 @@ import {
   type ResearchCandleLoader,
   type ResearchMarketDataOptions
 } from './cli-market-data.js';
+import { resolveResearchKlineMarket } from './kline-market.js';
 import {
   buildResearchCliReport,
   DEFAULT_TIMEFRAMES,
@@ -29,6 +30,7 @@ export async function runResearchCli(
   const candleCount = options.candleCount ?? DEFAULT_RESEARCH_CANDLE_COUNT;
   const marketOptions: ResearchMarketDataOptions = {
     candleCount,
+    klineMarket: options.klineMarket ?? resolveResearchKlineMarket(),
     ...(options.endTime !== undefined ? { endTime: options.endTime } : {})
   };
   const candlesByTimeframe = await fetchBinanceCandlesByTimeframe(
@@ -98,23 +100,31 @@ function parseFormatArg(args: readonly string[]): 'auto' | 'terminal' | 'markdow
   return undefined;
 }
 
+function parseMarketArg(args: readonly string[]): import('./kline-market.js').BinanceKlineMarket | undefined {
+  const raw = readFlagValue(args, '--market');
+  return raw !== undefined ? resolveResearchKlineMarket(raw) : undefined;
+}
+
 export function parseResearchCliArgs(args: readonly string[]): {
   symbol: string;
   timeframes?: Timeframe[];
   horizonCandles?: number;
   candleCount?: number;
   format?: 'auto' | 'terminal' | 'markdown';
+  klineMarket?: import('./kline-market.js').BinanceKlineMarket;
 } {
   const timeframes = parseTimeframesArg(args);
   const horizonCandles = parseHorizonArg(args);
   const candleCount = parseLookbackArg(args);
   const format = parseFormatArg(args);
+  const klineMarket = parseMarketArg(args);
   return {
     symbol: parseSymbolArg(args),
     ...(timeframes !== undefined ? { timeframes } : {}),
     ...(horizonCandles !== undefined ? { horizonCandles } : {}),
     ...(candleCount !== undefined ? { candleCount } : {}),
-    ...(format !== undefined ? { format } : {})
+    ...(format !== undefined ? { format } : {}),
+    ...(klineMarket !== undefined ? { klineMarket } : {})
   };
 }
 
@@ -126,13 +136,17 @@ const isMainModule = (): boolean => {
 
 async function runCliMain(): Promise<void> {
   const cliArgs = process.argv.slice(2).filter(arg => arg !== '--');
-  const { symbol, timeframes, horizonCandles, candleCount, format } = parseResearchCliArgs(cliArgs);
+  const parsed = parseResearchCliArgs(cliArgs);
+  const { symbol, timeframes, horizonCandles, candleCount, format, klineMarket } = parsed;
   const options: ResearchCliOptions = {};
   if (timeframes !== undefined) options.timeframes = timeframes;
   if (horizonCandles !== undefined) options.horizonCandles = horizonCandles;
   if (candleCount !== undefined) options.candleCount = candleCount;
   if (format !== undefined) options.format = format;
-  const output = await runResearchCli(symbol, options);
+  const output = await runResearchCli(symbol, {
+    ...options,
+    ...(klineMarket !== undefined ? { klineMarket } : {}),
+  });
   process.stdout.write(`${output}\n`);
 }
 
