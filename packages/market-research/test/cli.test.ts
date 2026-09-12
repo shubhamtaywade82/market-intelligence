@@ -80,7 +80,7 @@ describe('Research CLI Runner', () => {
     expect(rowMatch![1]).not.toEqual(rowMatch![2]);
   });
 
-  it('parses CLI flags including pnpm separator', () => {
+  it('parses CLI flags including pnpm separator and format', () => {
     const parsed = parseResearchCliArgs([
       '--',
       '--symbol',
@@ -90,14 +90,47 @@ describe('Research CLI Runner', () => {
       '--horizon',
       '48',
       '--lookback',
-      '600'
+      '600',
+      '--markdown'
     ]);
     expect(parsed).toEqual({
       symbol: 'SOLUSDT',
       timeframes: ['15m', '4h'],
       horizonCandles: 48,
-      candleCount: 600
+      candleCount: 600,
+      format: 'markdown'
     });
+  });
+
+  it('renders Unicode box table with ANSI colors when format is terminal', () => {
+    const report = buildResearchCliReport(
+      'ETHUSDT',
+      {
+        '15m': fixtureCandles(400, 20, 3000),
+        '1h': fixtureCandles(400, 8, 3000)
+      },
+      { timeframes: ['15m', '1h'], candleCount: 400, format: 'terminal' }
+    );
+    expect(report).toContain('┌');
+    expect(report).toContain('┐');
+    expect(report).toContain('└');
+    expect(report).toContain('┘');
+    expect(report).toContain('│');
+    expect(report).toContain('STABLE');
+  });
+
+  it('renders markdown table when format is markdown', () => {
+    const report = buildResearchCliReport(
+      'ETHUSDT',
+      {
+        '15m': fixtureCandles(400, 20, 3000),
+        '1h': fixtureCandles(400, 8, 3000)
+      },
+      { timeframes: ['15m', '1h'], candleCount: 400, format: 'markdown' }
+    );
+    expect(report).toContain('| Component |');
+    expect(report).toContain('| :--- |');
+    expect(report).not.toContain('┌');
   });
 
   it('rejects invalid timeframe tokens', () => {

@@ -18,4 +18,5 @@ export * from './multiple-testing.js';
 export * from './negative-evidence.js';
 export { runLiveMarketStudy, runLiveStudyFromCandles } from './live-study.js';
 export type { LiveStudyOptions, LiveStudyFromCandlesOptions } from './live-study.js';
+export { runResearchCli, buildResearchCliReport, type ResearchCliOptions } from './cli.js';
 export * from './data/index.js';

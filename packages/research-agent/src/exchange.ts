@@ -31,6 +31,57 @@ export interface ResearchAgentFromExchangeOptions {
   readonly batchLimit?: number | undefined;
 }
 
+export type BuildResearchContextFromExchangeOptions = Omit<
+  ResearchAgentFromExchangeOptions,
+  'agentOptions'
+>;
+
+export async function buildResearchContextFromExchange(
+  options: BuildResearchContextFromExchangeOptions,
+): Promise<ResearchContext> {
+  const { adapter, symbol, timeframe, startTime, endTime, htfTimeframes, signal, batchLimit } = options;
+
+  const candles = await adapter.fetchKlines({
+    symbol,
+    timeframe,
+    startTime,
+    endTime,
+    ...(batchLimit !== undefined ? { batchLimit } : {}),
+    ...(signal !== undefined ? { signal } : {}),
+  });
+
+  if (candles.length === 0) {
+    throw new Error(
+      `No candles returned from ${adapter.exchange} for ${symbol} ${timeframe} in [${startTime}, ${endTime})`,
+    );
+  }
+
+  let htfCandles: ResearchContext['htfCandles'] | undefined;
+  if (htfTimeframes && htfTimeframes.length > 0) {
+    const entries = await Promise.all(
+      htfTimeframes.map(async (tf) => {
+        const htf = await adapter.fetchKlines({
+          symbol,
+          timeframe: tf,
+          startTime,
+          endTime,
+          ...(batchLimit !== undefined ? { batchLimit } : {}),
+          ...(signal !== undefined ? { signal } : {}),
+        });
+        return [tf, htf] as const;
+      }),
+    );
+    htfCandles = Object.fromEntries(entries) as ResearchContext['htfCandles'];
+  }
+
+  return {
+    symbol,
+    timeframe,
+    candles,
+    ...(htfCandles !== undefined ? { htfCandles } : {}),
+  };
+}
+
 /**
  * Construct a {@link ResearchAgent} bound to historical candles fetched
  * directly from an exchange adapter. Convenience wrapper that:
@@ -66,57 +117,7 @@ export interface ResearchAgentFromExchangeOptions {
 export async function createResearchAgentFromExchange(
   options: ResearchAgentFromExchangeOptions,
 ): Promise<ResearchAgent> {
-  const {
-    adapter,
-    symbol,
-    timeframe,
-    startTime,
-    endTime,
-    htfTimeframes,
-    agentOptions,
-    signal,
-    batchLimit,
-  } = options;
-
-  const candles = await adapter.fetchKlines({
-    symbol,
-    timeframe,
-    startTime,
-    endTime,
-    ...(batchLimit !== undefined ? { batchLimit } : {}),
-    ...(signal !== undefined ? { signal } : {}),
-  });
-
-  if (candles.length === 0) {
-    throw new Error(
-      `No candles returned from ${adapter.exchange} for ${symbol} ${timeframe} in [${startTime}, ${endTime})`,
-    );
-  }
-
-  let htfCandles: ResearchContext['htfCandles'] | undefined;
-  if (htfTimeframes && htfTimeframes.length > 0) {
-    const entries = await Promise.all(
-      htfTimeframes.map(async (tf) => {
-        const htf = await adapter.fetchKlines({
-          symbol,
-          timeframe: tf,
-          startTime,
-          endTime,
-          ...(batchLimit !== undefined ? { batchLimit } : {}),
-          ...(signal !== undefined ? { signal } : {}),
-        });
-        return [tf, htf] as const;
-      }),
-    );
-    htfCandles = Object.fromEntries(entries) as ResearchContext['htfCandles'];
-  }
-
-  const context: ResearchContext = {
-    symbol,
-    timeframe,
-    candles,
-    ...(htfCandles !== undefined ? { htfCandles } : {}),
-  };
-
+  const { agentOptions, ...fetchOptions } = options;
+  const context = await buildResearchContextFromExchange(fetchOptions);
   return createResearchAgent(context, agentOptions);
 }

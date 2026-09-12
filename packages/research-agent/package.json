@@ -19,25 +19,21 @@
   },
   "dependencies": {
     "@nemesis-oss/agentic-runtime": "^0.2.1",
+    "@nemesis-oss/market-data": "workspace:*",
     "@nemesis-oss/market-events": "workspace:*",
     "@nemesis-oss/market-research": "workspace:*",
     "decimal.js": "^10.4.3",
     "zod": "^3.24"
   },
   "peerDependencies": {
-    "@nemesis-oss/ollama-sdk": "^1.3.0",
-    "@nemesis-oss/market-data": "workspace:*"
+    "@nemesis-oss/ollama-sdk": "^1.3.0"
   },
   "peerDependenciesMeta": {
     "@nemesis-oss/ollama-sdk": {
       "optional": true
-    },
-    "@nemesis-oss/market-data": {
-      "optional": true
     }
   },
   "devDependencies": {
-    "@nemesis-oss/market-data": "workspace:*",
     "@nemesis-oss/ollama-sdk": "^1.3.0",
     "@types/node": "^22.13.0",
     "typescript": "^5.7.3",

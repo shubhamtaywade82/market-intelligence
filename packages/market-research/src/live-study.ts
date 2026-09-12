@@ -5,12 +5,14 @@ import { loadDataset, saveDataset } from './data/dataset-store.js';
 import { buildEffectivenessMatrix, formatMatrixMarkdown } from './matrix-report.js';
 import { runObservationStudy } from './study-runner.js';
 import { formatStabilityMarkdown, runWalkForwardValidation } from './walk-forward.js';
+import { formatMatrixTerminal, formatStabilityTerminal, shouldFormatTerminal } from './cli-report.js';
 
 export interface LiveStudyFromCandlesOptions {
   readonly symbol: string;
   readonly timeframe: Timeframe;
   readonly horizonCandles?: number | undefined;
   readonly datasetPath?: string | undefined;
+  readonly format?: 'auto' | 'terminal' | 'markdown' | undefined;
 }
 
 export interface LiveStudyOptions extends LiveStudyFromCandlesOptions {
@@ -58,8 +60,11 @@ export function runLiveStudyFromCandles(
     timeframe: options.timeframe,
     horizonCandles
   });
+  const isTerminal = shouldFormatTerminal(options.format);
   const matrix = buildEffectivenessMatrix(options.symbol, study.results);
-  const matrixMd = formatMatrixMarkdown(matrix, [options.timeframe]);
+  const matrixStr = isTerminal
+    ? formatMatrixTerminal(matrix, [options.timeframe])
+    : formatMatrixMarkdown(matrix, [options.timeframe]);
   const wfSizes = walkForwardSizing(candles.length);
   const wf = runWalkForwardValidation(candles, {
     symbol: options.symbol,
@@ -68,15 +73,18 @@ export function runLiveStudyFromCandles(
     horizonCandles,
     warmupBars: 50
   });
+  const stabilityStr = isTerminal
+    ? formatStabilityTerminal(wf.stability)
+    : formatStabilityMarkdown(wf.stability);
 
   const lines = [
     `# Live study: ${options.symbol} ${options.timeframe}`,
     `Candles: ${candles.length}`,
     ...(options.datasetPath ? [`Dataset: ${options.datasetPath}`] : []),
     '',
-    matrixMd,
+    matrixStr,
     '',
-    formatStabilityMarkdown(wf.stability)
+    stabilityStr
   ];
   return lines.join('\n');
 }
@@ -112,6 +120,7 @@ export async function runLiveMarketStudy(options: LiveStudyOptions = {
     symbol,
     timeframe,
     horizonCandles: options.horizonCandles,
-    datasetPath: cachePath
+    datasetPath: cachePath,
+    format: options.format
   });
 }

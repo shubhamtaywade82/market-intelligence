@@ -13,6 +13,8 @@
     "typecheck": "pnpm -r typecheck",
     "cli": "pnpm --filter @nemesis-oss/market-research cli",
     "live-study": "pnpm --filter @nemesis-oss/market-research live-study",
+    "research": "pnpm --filter @nemesis-oss/market-research-agent cli",
+    "tui": "pnpm --filter @nemesis-oss/demo-runner tui",
     "lint": "eslint packages"
   },
   "devDependencies": {

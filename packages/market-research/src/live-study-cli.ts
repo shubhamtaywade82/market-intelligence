@@ -15,6 +15,14 @@ function readFlagValue(args: readonly string[], flag: string): string | undefine
   return value;
 }
 
+function parseFormatArg(args: readonly string[]): 'auto' | 'terminal' | 'markdown' | undefined {
+  if (args.includes('--markdown')) return 'markdown';
+  if (args.includes('--terminal')) return 'terminal';
+  const raw = readFlagValue(args, '--format');
+  if (raw === 'markdown' || raw === 'terminal' || raw === 'auto') return raw;
+  return undefined;
+}
+
 function parseArgs(args: readonly string[]): {
   symbol: string;
   timeframe: Timeframe;
@@ -22,6 +30,7 @@ function parseArgs(args: readonly string[]): {
   horizon: number;
   dataDir: string;
   refresh: boolean;
+  format?: 'auto' | 'terminal' | 'markdown';
 } {
   const symbol = readFlagValue(args, '--symbol') ?? 'BTCUSDT';
   const tfRaw = readFlagValue(args, '--timeframe') ?? '15m';
@@ -40,7 +49,16 @@ function parseArgs(args: readonly string[]): {
   }
   const dataDir = readFlagValue(args, '--data-dir') ?? path.join(process.cwd(), '.datasets');
   const refresh = args.includes('--refresh');
-  return { symbol, timeframe: tfRaw as Timeframe, days, horizon, dataDir, refresh };
+  const format = parseFormatArg(args);
+  return {
+    symbol,
+    timeframe: tfRaw as Timeframe,
+    days,
+    horizon,
+    dataDir,
+    refresh,
+    ...(format !== undefined ? { format } : {})
+  };
 }
 
 const isMainModule = (): boolean => {
@@ -59,7 +77,8 @@ if (isMainModule()) {
       days: parsed.days,
       horizonCandles: parsed.horizon,
       dataDir: parsed.dataDir,
-      useCache: !parsed.refresh
+      useCache: !parsed.refresh,
+      ...(parsed.format !== undefined ? { format: parsed.format } : {})
     });
     process.stdout.write(`${output}\n`);
   } catch (err) {

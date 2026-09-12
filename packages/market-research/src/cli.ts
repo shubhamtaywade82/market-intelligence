@@ -9,7 +9,6 @@ import {
 } from './cli-market-data.js';
 import {
   buildResearchCliReport,
-  DEFAULT_HORIZON_CANDLES,
   DEFAULT_TIMEFRAMES,
   type ResearchCliOptions
 } from './cli-report.js';
@@ -41,6 +40,7 @@ export async function runResearchCli(
   const reportOptions: ResearchCliOptions = { timeframes, candleCount };
   if (options.horizonCandles !== undefined) reportOptions.horizonCandles = options.horizonCandles;
   if (options.endTime !== undefined) reportOptions.endTime = options.endTime;
+  if (options.format !== undefined) reportOptions.format = options.format;
   return buildResearchCliReport(symbol, candlesByTimeframe, reportOptions);
 }
 
@@ -90,20 +90,31 @@ function parseSymbolArg(args: readonly string[]): string {
   return firstNonFlag ?? 'ETHUSDT';
 }
 
+function parseFormatArg(args: readonly string[]): 'auto' | 'terminal' | 'markdown' | undefined {
+  if (args.includes('--markdown')) return 'markdown';
+  if (args.includes('--terminal')) return 'terminal';
+  const raw = readFlagValue(args, '--format');
+  if (raw === 'markdown' || raw === 'terminal' || raw === 'auto') return raw;
+  return undefined;
+}
+
 export function parseResearchCliArgs(args: readonly string[]): {
   symbol: string;
   timeframes?: Timeframe[];
   horizonCandles?: number;
   candleCount?: number;
+  format?: 'auto' | 'terminal' | 'markdown';
 } {
   const timeframes = parseTimeframesArg(args);
   const horizonCandles = parseHorizonArg(args);
   const candleCount = parseLookbackArg(args);
+  const format = parseFormatArg(args);
   return {
     symbol: parseSymbolArg(args),
     ...(timeframes !== undefined ? { timeframes } : {}),
     ...(horizonCandles !== undefined ? { horizonCandles } : {}),
-    ...(candleCount !== undefined ? { candleCount } : {})
+    ...(candleCount !== undefined ? { candleCount } : {}),
+    ...(format !== undefined ? { format } : {})
   };
 }
 
@@ -115,11 +126,12 @@ const isMainModule = (): boolean => {
 
 async function runCliMain(): Promise<void> {
   const cliArgs = process.argv.slice(2).filter(arg => arg !== '--');
-  const { symbol, timeframes, horizonCandles, candleCount } = parseResearchCliArgs(cliArgs);
+  const { symbol, timeframes, horizonCandles, candleCount, format } = parseResearchCliArgs(cliArgs);
   const options: ResearchCliOptions = {};
   if (timeframes !== undefined) options.timeframes = timeframes;
   if (horizonCandles !== undefined) options.horizonCandles = horizonCandles;
   if (candleCount !== undefined) options.candleCount = candleCount;
+  if (format !== undefined) options.format = format;
   const output = await runResearchCli(symbol, options);
   process.stdout.write(`${output}\n`);
 }
