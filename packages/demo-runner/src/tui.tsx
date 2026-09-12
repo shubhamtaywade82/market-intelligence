@@ -4,6 +4,7 @@ import { Select } from '@inkui-cli/select';
 import { Spinner } from '@inkui-cli/spinner';
 import { darkTheme } from '@inkui-cli/core';
 import { runResearchCli, runLiveMarketStudy } from '@nemesis-oss/market-research';
+import { runResearchAgentCli } from '@nemesis-oss/market-research-agent';
 
 type ViewMode = 'menu' | 'loading' | 'result' | 'error';
 
@@ -45,7 +46,22 @@ const MENU_OPTIONS: readonly MenuOption[] = [
     description: 'Live Binance 15m klines with rolling out-of-sample walk-forward validation'
   },
   {
-    label: '7. Exit',
+    label: '7. [Agent] Preflight Check (Ollama status & models)',
+    value: 'agent-preflight',
+    description: 'Verify local Ollama connectivity and model availability'
+  },
+  {
+    label: '8. [Agent] Research: FVG Edge & FDR Significance (BTCUSDT)',
+    value: 'agent-fvg-edge',
+    description: 'LLM ReAct loop with deterministic tools for FVG continuation hypothesis'
+  },
+  {
+    label: '9. [Agent] Research: HTF Conflict Evidence Degradation (SOLUSDT)',
+    value: 'agent-htf-conflict',
+    description: 'LLM ReAct loop evaluating negative evidence balance on SOL 15m vs 1h'
+  },
+  {
+    label: '10. Exit',
     value: 'exit',
     description: 'Close interactive TUI'
   }
@@ -65,6 +81,36 @@ async function executeAction(action: string): Promise<string> {
       return runLiveMarketStudy({ symbol: 'ETHUSDT', timeframe: '15m', days: 7, format: 'terminal' });
     case 'sol-live-7d':
       return runLiveMarketStudy({ symbol: 'SOLUSDT', timeframe: '15m', days: 7, format: 'terminal' });
+    case 'agent-preflight':
+      return runResearchAgentCli({
+        question: '',
+        symbol: 'BTCUSDT',
+        timeframe: '15m',
+        days: 7,
+        htfTimeframes: [],
+        checkOnly: true,
+        skipPreflight: false
+      });
+    case 'agent-fvg-edge':
+      return runResearchAgentCli({
+        question: 'Does bullish FVG continuation on BTCUSDT provide a statistically significant +2R edge over matched controls after FDR correction, and does walk-forward validation show stable out-of-sample performance?',
+        symbol: 'BTCUSDT',
+        timeframe: '15m',
+        days: 7,
+        htfTimeframes: ['1h'],
+        checkOnly: false,
+        skipPreflight: false
+      });
+    case 'agent-htf-conflict':
+      return runResearchAgentCli({
+        question: 'Measure the degradation in empirical hit rate caused by contradictory or negative evidence (HTF trend conflict) on SOLUSDT 15m vs 1h.',
+        symbol: 'SOLUSDT',
+        timeframe: '15m',
+        days: 7,
+        htfTimeframes: ['1h'],
+        checkOnly: false,
+        skipPreflight: false
+      });
     default:
       throw new Error(`Unknown action: ${action}`);
   }
@@ -155,8 +201,20 @@ export const App: React.FC = () => {
       )}
       {mode === 'loading' && (
         <Box flexDirection="column" marginY={1}>
-          <Spinner type="dots" label="Fetching Binance klines and running empirical research study..." theme={darkTheme} />
-          <Text color="gray">This computes causal excursion metrics (MFE/MAE/R) and walk-forward stability.</Text>
+          <Spinner
+            type="dots"
+            label={
+              activeAction.startsWith('agent')
+                ? 'Research Agent is reasoning, dispatching tools, and synthesizing report...'
+                : 'Fetching Binance klines and running empirical research study...'
+            }
+            theme={darkTheme}
+          />
+          <Text color="gray">
+            {activeAction.startsWith('agent')
+              ? 'Multi-step ReAct loop with No-Tools Guarantee (enforces empirical verification).'
+              : 'Computes causal excursion metrics (MFE/MAE/R) and walk-forward stability.'}
+          </Text>
         </Box>
       )}
       {mode === 'result' && <ResultView content={result} />}

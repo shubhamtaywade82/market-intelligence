@@ -73,6 +73,7 @@ if (isMainModule()) {
       const parsed = parseResearchAgentCliArgs(rawArgs);
       const output = await runResearchAgentCli(parsed);
       process.stdout.write(`${output}\n`);
+      process.exit(0);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       process.stderr.write(`research-agent: ${message}\n`);
