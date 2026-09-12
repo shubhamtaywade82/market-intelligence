@@ -18,6 +18,56 @@ importers:
         specifier: ^5.0.0
         version: 5.0.0(@types/node@22.20.2)(vite@7.3.6(@types/node@22.20.2))
 
+  packages/event-graph:
+    dependencies:
+      '@nemesis-oss/market-events':
+        specifier: workspace:*
+        version: link:../market-events
+      '@nemesis-oss/market-research':
+        specifier: workspace:*
+        version: link:../market-research
+      decimal.js:
+        specifier: ^10.4.3
+        version: 10.6.0
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.0
+        version: 22.20.2
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@22.20.2)
+
+  packages/hypothesis-engine:
+    dependencies:
+      '@nemesis-oss/market-events':
+        specifier: workspace:*
+        version: link:../market-events
+      '@nemesis-oss/market-features':
+        specifier: workspace:*
+        version: link:../market-features
+      '@nemesis-oss/market-research':
+        specifier: workspace:*
+        version: link:../market-research
+      '@nemesis-oss/regime-engine':
+        specifier: workspace:*
+        version: link:../regime-engine
+      decimal.js:
+        specifier: ^10.4.3
+        version: 10.6.0
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.0
+        version: 22.20.2
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@22.20.2)
+
   packages/market-data:
     dependencies:
       '@nemesis-oss/market-events':
@@ -59,6 +109,62 @@ importers:
         specifier: ^5.0.0
         version: 5.0.0(@types/node@22.20.2)(vite@7.3.6(@types/node@22.20.2))
 
+  packages/market-features:
+    dependencies:
+      '@nemesis-oss/market-events':
+        specifier: workspace:*
+        version: link:../market-events
+      decimal.js:
+        specifier: ^10.4.3
+        version: 10.6.0
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.0
+        version: 22.20.2
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@22.20.2)
+
+  packages/market-intelligence-api:
+    dependencies:
+      '@nemesis-oss/market-data':
+        specifier: workspace:*
+        version: link:../market-data
+      '@nemesis-oss/market-events':
+        specifier: workspace:*
+        version: link:../market-events
+      '@nemesis-oss/market-research':
+        specifier: workspace:*
+        version: link:../market-research
+      '@nemesis-oss/market-state':
+        specifier: workspace:*
+        version: link:../market-state
+      '@nemesis-oss/market-stream':
+        specifier: workspace:*
+        version: link:../market-stream
+      '@nemesis-oss/research-memory':
+        specifier: workspace:*
+        version: link:../research-memory
+      '@nemesis-oss/strategy-discovery':
+        specifier: workspace:*
+        version: link:../strategy-discovery
+      '@nemesis-oss/strategy-registry':
+        specifier: workspace:*
+        version: link:../strategy-registry
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.0
+        version: 22.20.2
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@22.20.2)
+
   packages/market-research:
     dependencies:
       '@nemesis-oss/market-events':
@@ -78,11 +184,83 @@ importers:
         specifier: ^5.0.0
         version: 5.0.0(@types/node@22.20.2)(vite@7.3.6(@types/node@22.20.2))
 
+  packages/market-state:
+    dependencies:
+      '@nemesis-oss/market-data':
+        specifier: workspace:*
+        version: link:../market-data
+      '@nemesis-oss/market-events':
+        specifier: workspace:*
+        version: link:../market-events
+      '@nemesis-oss/market-research':
+        specifier: workspace:*
+        version: link:../market-research
+      '@nemesis-oss/market-stream':
+        specifier: workspace:*
+        version: link:../market-stream
+      decimal.js:
+        specifier: ^10.4.3
+        version: 10.6.0
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.0
+        version: 22.20.2
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@22.20.2)
+
   packages/market-stream:
     dependencies:
       '@nemesis-oss/market-data':
         specifier: workspace:*
         version: link:../market-data
+      '@nemesis-oss/market-events':
+        specifier: workspace:*
+        version: link:../market-events
+      '@nemesis-oss/market-research':
+        specifier: workspace:*
+        version: link:../market-research
+      decimal.js:
+        specifier: ^10.4.3
+        version: 10.6.0
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.0
+        version: 22.20.2
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@22.20.2)
+
+  packages/negative-evidence-system:
+    dependencies:
+      '@nemesis-oss/market-events':
+        specifier: workspace:*
+        version: link:../market-events
+      '@nemesis-oss/market-research':
+        specifier: workspace:*
+        version: link:../market-research
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.0
+        version: 22.20.2
+      decimal.js:
+        specifier: ^10.4.3
+        version: 10.6.0
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@22.20.2)
+
+  packages/regime-engine:
+    dependencies:
       '@nemesis-oss/market-events':
         specifier: workspace:*
         version: link:../market-events
@@ -136,6 +314,72 @@ importers:
       vitest:
         specifier: ^5.0.0
         version: 5.0.0(@types/node@22.20.2)(vite@7.3.6(@types/node@22.20.2))
+
+  packages/research-memory:
+    dependencies:
+      '@nemesis-oss/hypothesis-engine':
+        specifier: workspace:*
+        version: link:../hypothesis-engine
+      '@nemesis-oss/strategy-discovery':
+        specifier: workspace:*
+        version: link:../strategy-discovery
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.0
+        version: 22.20.2
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@22.20.2)
+
+  packages/strategy-discovery:
+    dependencies:
+      '@nemesis-oss/hypothesis-engine':
+        specifier: workspace:*
+        version: link:../hypothesis-engine
+      '@nemesis-oss/market-events':
+        specifier: workspace:*
+        version: link:../market-events
+      '@nemesis-oss/market-features':
+        specifier: workspace:*
+        version: link:../market-features
+      '@nemesis-oss/market-research':
+        specifier: workspace:*
+        version: link:../market-research
+      '@nemesis-oss/regime-engine':
+        specifier: workspace:*
+        version: link:../regime-engine
+      decimal.js:
+        specifier: ^10.4.3
+        version: 10.6.0
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.0
+        version: 22.20.2
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@22.20.2)
+
+  packages/strategy-registry:
+    dependencies:
+      '@nemesis-oss/strategy-discovery':
+        specifier: workspace:*
+        version: link:../strategy-discovery
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.0
+        version: 22.20.2
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@22.20.2)
 
 packages:
 

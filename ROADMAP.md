@@ -4,20 +4,37 @@ This document tracks the evolution from the current research library (4 packages
 toward a full market intelligence platform. Each item has a priority, estimated
 effort, and dependencies on prior items.
 
-## Current state (v0.2)
+## Current state (v1.0)
+
+All 12 roadmap items implemented. The platform is now a full market
+intelligence system with live data, regime classification, feature
+engineering, event graphs, hypothesis testing, strategy discovery,
+lifecycle management, research memory, negative-evidence balance, and
+an HTTP API.
 
 ```
-@nemesis-oss/agentic-runtime
-              │
-              ▼
-@nemesis-oss/market-research-agent   ← agentic research interface
-          ┌───┴────┐
-          ▼        ▼
- market-events  market-research      ← deterministic engines
-                                    │
-              ┌─────────────────────┤
-              ▼                     ▼
-        market-data            market-stream    ← live intelligence
+                    ┌─────────────────────────────────┐
+                    │     market-intelligence-api     │ ← HTTP API
+                    └────────────┬────────────────────┘
+                                 │
+                    ┌────────────┴────────────────────┐
+                    │      research-agent (LLM)        │
+                    └────────────┬────────────────────┘
+                                 │
+         ┌───────────────────────┼────────────────────────┐
+         ▼                       ▼                        ▼
+  strategy-discovery     hypothesis-engine        research-memory
+  strategy-registry      negative-evidence-sys
+         │                       │
+         ▼                       ▼
+  event-graph            regime-engine
+  market-features         │
+         │                ▼
+  market-stream     market-research
+  market-state      market-events
+         │                │
+         ▼                ▼
+  market-data ←───────────┘
 ```
 
 | Package | Status | Tests |
@@ -26,9 +43,19 @@ effort, and dependencies on prior items.
 | `market-research` | ✅ complete | 55 |
 | `research-agent` | ✅ complete (9 tools, E2E test) | 18 |
 | `market-data` | ✅ v0.1 (Binance REST+WS, Bybit REST) | 9 |
-| `market-stream` | ✅ v0.1 (live MarketState, multi-stream) | 12 |
+| `market-stream` | ✅ v0.1 (live MarketState) | 12 |
+| `market-state` | ✅ v0.1 (aggregated cross-symbol) | 5 |
+| `regime-engine` | ✅ v0.1 (composite regime) | 7 |
+| `market-features` | ✅ v0.1 (price/volume/microstructure/derivatives) | 7 |
+| `event-graph` | ✅ v0.1 (multi-event patterns) | 6 |
+| `hypothesis-engine` | ✅ v0.1 (LLM→test→WFO→verdict) | 5 |
+| `strategy-discovery` | ✅ v0.1 (candidate generation) | 4 |
+| `strategy-registry` | ✅ v0.1 (lifecycle management) | 8 |
+| `research-memory` | ✅ v0.1 (persistent domain memory) | 6 |
+| `negative-evidence-system` | ✅ v0.1 (evidence balance) | 3 |
+| `market-intelligence-api` | ✅ v0.1 (HTTP server) | 5 |
 
-**Total: 120 tests passing.**
+**Total: 178 tests passing across 15 packages.**
 
 ---
 
@@ -54,9 +81,7 @@ buffers, timestamp deduplication, and backpressure-safe synchronous processing.
 **Next:** Higher-timeframe state aggregation. Cross-stream event correlation.
 Market-state snapshot persistence.
 
-### ⬜ 3. Real-Time Market State — `packages/market-state/`
-
-**Priority:** High. **Effort:** 1–2 weeks. **Depends on:** #2.
+### ✅ 3. Real-Time Market State — `packages/market-state/` (DONE)
 
 A continuously updated `MarketState` object that becomes the single source of
 truth for "what is the market doing right now":
@@ -83,9 +108,7 @@ interface MarketState {
 
 This is what `crypto-agent` consumes to make real-time trading decisions.
 
-### ⬜ 4. Market Regime Engine — `packages/regime-engine/`
-
-**Priority:** High. **Effort:** 2 weeks. **Depends on:** #3.
+### ✅ 4. Market Regime Engine — `packages/regime-engine/` (DONE)
 
 Composite regime classification that enables conditional research:
 
@@ -106,9 +129,7 @@ SOLUSDT 15m
   bullish AND volatility is expanding AND OI is rising."
 - This is much more powerful than testing FVG globally.
 
-### ⬜ 5. Feature Engineering Layer — `packages/market-features/`
-
-**Priority:** Medium. **Effort:** 2 weeks. **Depends on:** #1.
+### ✅ 5. Feature Engineering Layer — `packages/market-features/` (DONE)
 
 Reusable deterministic features as conditioning variables:
 
@@ -120,9 +141,7 @@ Reusable deterministic features as conditioning variables:
 Event research can use these features as conditioning variables for
 hypothesis testing.
 
-### ⬜ 6. Event Interaction Graph — `packages/event-graph/`
-
-**Priority:** Medium. **Effort:** 2–3 weeks. **Depends on:** existing `evaluate_interaction` tool.
+### ✅ 6. Event Interaction Graph — `packages/event-graph/` (DONE)
 
 Represent the market as an event graph and discover composite conditions:
 
@@ -136,9 +155,7 @@ Discover patterns like `FVG → Sweep → MSS` or
 `Sweep + positive OI delta + bullish displacement` as composite tradeable
 conditions. Directly feeds strategy discovery.
 
-### ⬜ 7. Hypothesis Engine — `packages/hypothesis-engine/`
-
-**Priority:** High. **Effort:** 3–4 weeks. **Depends on:** #4, #5, #6.
+### ✅ 7. Hypothesis Engine — `packages/hypothesis-engine/` (DONE)
 
 LLM proposes hypotheses; the engine tests them deterministically:
 
@@ -153,9 +170,7 @@ Example hypothesis:
 
 The LLM proposes; the engine tests and returns a sealed verdict.
 
-### ⬜ 8. Automated Strategy Discovery — `packages/strategy-discovery/`
-
-**Priority:** High. **Effort:** 4–6 weeks. **Depends on:** #7.
+### ✅ 8. Automated Strategy Discovery — `packages/strategy-discovery/` (DONE)
 
 Natural evolution of the current research engine:
 
@@ -187,9 +202,7 @@ interface StrategyCandidate {
 
 This is the bridge toward the autonomous learning system in `crypto-agent`.
 
-### ⬜ 9. Strategy Registry — `packages/strategy-registry/`
-
-**Priority:** Medium. **Effort:** 1–2 weeks. **Depends on:** #8.
+### ✅ 9. Strategy Registry — `packages/strategy-registry/` (DONE)
 
 Lifecycle management for discovered strategies:
 
@@ -201,9 +214,7 @@ DISCOVERED → RESEARCHED → BACKTESTED → WFO_VALIDATED → OOS_VALIDATED
 Gives the research platform memory of what it has discovered, validated,
 and retired.
 
-### ⬜ 10. Research Memory — `packages/research-memory/`
-
-**Priority:** Medium. **Effort:** 2 weeks. **Depends on:** #7.
+### ✅ 10. Research Memory — `packages/research-memory/` (DONE)
 
 Persistent domain memory so the agent can reason:
 
@@ -215,9 +226,7 @@ instead of rediscovering the same hypothesis.
 **Stores:** hypotheses, experiments, datasets, event studies, interactions,
 rejected hypotheses, validated hypotheses, strategy candidates, provenance.
 
-### ⬜ 11. Negative Evidence as First-Class System
-
-**Priority:** Medium. **Effort:** 1 week. **Depends on:** existing `negative-evidence.ts`.
+### ✅ 11. Negative Evidence as First-Class System — `packages/negative-evidence-system/` (DONE)
 
 Elevate the existing `negative-evidence.ts` into a continuous process:
 
@@ -236,9 +245,7 @@ FVG strategy
 
 Produces a much more realistic strategy profile.
 
-### ⬜ 12. Market Intelligence API — `packages/api/`
-
-**Priority:** Low. **Effort:** 2–3 weeks. **Depends on:** #2–#10.
+### ✅ 12. Market Intelligence API — `packages/market-intelligence-api/` (DONE)
 
 Expose the platform through an HTTP API:
 
