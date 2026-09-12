@@ -1,0 +1,34 @@
+{
+  "name": "@nemesis-oss/demo-runner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "milestone": "tsx src/milestone-question.ts",
+    "api": "tsx src/api-server.ts"
+  },
+  "dependencies": {
+    "@nemesis-oss/market-events": "workspace:*",
+    "@nemesis-oss/market-research": "workspace:*",
+    "@nemesis-oss/market-research-agent": "workspace:*",
+    "@nemesis-oss/market-data": "workspace:*",
+    "@nemesis-oss/market-stream": "workspace:*",
+    "@nemesis-oss/market-state": "workspace:*",
+    "@nemesis-oss/regime-engine": "workspace:*",
+    "@nemesis-oss/market-features": "workspace:*",
+    "@nemesis-oss/event-graph": "workspace:*",
+    "@nemesis-oss/hypothesis-engine": "workspace:*",
+    "@nemesis-oss/strategy-discovery": "workspace:*",
+    "@nemesis-oss/strategy-registry": "workspace:*",
+    "@nemesis-oss/research-memory": "workspace:*",
+    "@nemesis-oss/negative-evidence-system": "workspace:*",
+    "@nemesis-oss/market-intelligence-api": "workspace:*",
+    "decimal.js": "^10.4.3",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "tsx": "^4.23.13",
+    "typescript": "^5.7.3"
+  }
+}
