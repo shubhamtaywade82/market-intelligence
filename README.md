@@ -4,6 +4,8 @@ A high-assurance quantitative research engine for deterministic market event det
 
 Built as the empirical evidence layer for systematic trading systems and autonomous AI agents like [`crypto-agent`](https://github.com/shubhamtaywade82/crypto-agent).
 
+> **Roadmap:** See [ROADMAP.md](ROADMAP.md) for the evolution from research library to full market intelligence platform (live data, regime engine, hypothesis engine, strategy discovery).
+
 ---
 
 ## Architecture & Monorepo Structure
@@ -16,14 +18,15 @@ Built as the empirical evidence layer for systematic trading systems and autonom
                       /          \
                      ▼            ▼
            market-events    market-research
-                            │
-                            ▼
-                crypto-agent / Execution Systems
+                                    │
+                                    ▼
+                        crypto-agent / Execution Systems
                   (Evidence Consumers)
 ```
 
 | Package | Purpose | Primary Responsibilities |
 | :--- | :--- | :--- |
+| [`@nemesis-oss/market-data`](packages/market-data) | Exchange data adapters | Binance + Bybit REST (historical klines, funding, OI, mark price) and Binance WebSocket (live klines with reconnect/recovery). Normalizes to canonical Decimal-typed `Candle`. |
 | [`@nemesis-oss/market-events`](packages/market-events) | Deterministic event detection | Zero-lookahead detection of FVGs, Structure Breaks (BOS/CHoCH/MSS), Order Blocks, Sweeps, VSA, Derivatives, and Wyckoff with strict lifecycle timelines. |
 | [`@nemesis-oss/market-research`](packages/market-research) | Empirical validation kernel | Trajectory excursion metrics (MFE/MAE/R), matched counterfactual controls, cluster bootstrap, FDR correction, walk-forward validation, negative-evidence impact. |
 | [`@nemesis-oss/market-research-agent`](packages/research-agent) | Agentic research interface | LLM-driven research planning, tool selection, and interpretation on top of the deterministic engines. Uses `@nemesis-oss/agentic-runtime` for the ReAct loop, tool dispatch, budgets, and terminal synthesis seal. Owns no domain logic. |
@@ -32,9 +35,10 @@ Built as the empirical evidence layer for systematic trading systems and autonom
 
 The dependency direction is one-way and strict:
 
+- `market-data` depends only on `market-events` (for the canonical `Candle` type).
 - `market-events` depends on nothing inside the monorepo.
 - `market-research` depends on `market-events`.
-- `research-agent` depends on `market-events` + `market-research` + `@nemesis-oss/agentic-runtime`.
+- `research-agent` depends on `market-events` + `market-research` + `@nemesis-oss/agentic-runtime` + `market-data` (optional peer).
 - `crypto-agent` depends on `research-agent` and may add higher-level strategy code on top.
 
 No package imports upward. The LLM never becomes part of either deterministic package.
@@ -142,6 +146,29 @@ console.log(result.report);     // sealed string
 console.log(result.status);     // 'ACHIEVED' | 'PARTIAL' | 'CEDED' | 'FAILED'
 ```
 
+### From Exchange Data (`market-data` + `research-agent`)
+
+Fetch candles directly from Binance and construct an agent in one call:
+
+```typescript
+import { createBinanceAdapter } from '@nemesis-oss/market-data';
+import { createResearchAgentFromExchange } from '@nemesis-oss/market-research-agent';
+
+const agent = await createResearchAgentFromExchange({
+  adapter: createBinanceAdapter(),
+  symbol: 'BTCUSDT',
+  timeframe: '15m',
+  startTime: Date.now() - 30 * 24 * 60 * 60 * 1000,  // 30 days
+  endTime: Date.now(),
+  htfTimeframes: ['1h', '4h'],
+});
+
+const result = await agent.research(
+  'Does bullish FVG continuation on BTCUSDT 15m provide statistically significant 2R edge?',
+);
+console.log(result.report);
+```
+
 For non-LLM direct invocation (backtest harness, CLI, unit test), call tools without spinning up Ollama:
 
 ```typescript
@@ -199,6 +226,8 @@ No release workflow yet. It will be added when `@nemesis-oss/market-research-age
 ## Documentation
 
 * [Architecture & Methodology Guide](docs/architecture.md)
+* [Roadmap: market intelligence platform](ROADMAP.md)
+* [`market-data` README](packages/market-data/README.md) — exchange adapters
 * [`market-events` README](packages/market-events/README.md)
 * [`market-research` README](packages/market-research/README.md)
 * [`research-agent` README](packages/research-agent/README.md) — including integration with `crypto-agent`
