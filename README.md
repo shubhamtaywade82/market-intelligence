@@ -27,6 +27,7 @@ Built as the empirical evidence layer for systematic trading systems and autonom
 | Package | Purpose | Primary Responsibilities |
 | :--- | :--- | :--- |
 | [`@nemesis-oss/market-data`](packages/market-data) | Exchange data adapters | Binance + Bybit REST (historical klines, funding, OI, mark price) and Binance WebSocket (live klines with reconnect/recovery). Normalizes to canonical Decimal-typed `Candle`. |
+| [`@nemesis-oss/market-stream`](packages/market-stream) | Live market intelligence | Continuously maintained `MarketState` from exchange WebSocket feeds: price, trend regime, volatility, ATR, session, active events. Multi-symbol/multi-timeframe orchestration with rolling candle buffers. |
 | [`@nemesis-oss/market-events`](packages/market-events) | Deterministic event detection | Zero-lookahead detection of FVGs, Structure Breaks (BOS/CHoCH/MSS), Order Blocks, Sweeps, VSA, Derivatives, and Wyckoff with strict lifecycle timelines. |
 | [`@nemesis-oss/market-research`](packages/market-research) | Empirical validation kernel | Trajectory excursion metrics (MFE/MAE/R), matched counterfactual controls, cluster bootstrap, FDR correction, walk-forward validation, negative-evidence impact. |
 | [`@nemesis-oss/market-research-agent`](packages/research-agent) | Agentic research interface | LLM-driven research planning, tool selection, and interpretation on top of the deterministic engines. Uses `@nemesis-oss/agentic-runtime` for the ReAct loop, tool dispatch, budgets, and terminal synthesis seal. Owns no domain logic. |
@@ -169,6 +170,40 @@ const result = await agent.research(
 console.log(result.report);
 ```
 
+### Live Market Intelligence (`market-stream`)
+
+Subscribe to live exchange WebSocket feeds and maintain a continuously-updated `MarketState`:
+
+```typescript
+import { createBinanceAdapter } from '@nemesis-oss/market-data';
+import { createMarketStream } from '@nemesis-oss/market-stream';
+
+const stream = createMarketStream(
+  {
+    adapter: createBinanceAdapter(),
+    streams: [
+      { symbol: 'BTCUSDT', timeframe: '15m' },
+      { symbol: 'ETHUSDT', timeframe: '15m' },
+    ],
+    detectors: ['fvg', 'bos', 'liquidity_sweep'],
+    eventLookbackBars: 10,
+  },
+  {
+    onState: (state) => {
+      console.log(`${state.symbol} ${state.timeframe}: price=${state.price}, trend=${state.trendRegime}, volatility=${state.volatilityRegime}, events=${state.activeEvents.length}`);
+    },
+    onEvent: (event, key) => {
+      console.log(`[${key.symbol}] NEW ${event.type} ${event.direction} at ${event.originTimestamp}`);
+    },
+  },
+);
+
+await stream.start();
+// Later: await stream.stop();
+```
+
+Answers "What is happening to SOLUSDT *right now*?" — the live counterpart to the historical research layer.
+
 For non-LLM direct invocation (backtest harness, CLI, unit test), call tools without spinning up Ollama:
 
 ```typescript
@@ -228,6 +263,7 @@ No release workflow yet. It will be added when `@nemesis-oss/market-research-age
 * [Architecture & Methodology Guide](docs/architecture.md)
 * [Roadmap: market intelligence platform](ROADMAP.md)
 * [`market-data` README](packages/market-data/README.md) — exchange adapters
+* [`market-stream` README](packages/market-stream/README.md) — live market intelligence
 * [`market-events` README](packages/market-events/README.md)
 * [`market-research` README](packages/market-research/README.md)
 * [`research-agent` README](packages/research-agent/README.md) — including integration with `crypto-agent`

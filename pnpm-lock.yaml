@@ -78,6 +78,31 @@ importers:
         specifier: ^5.0.0
         version: 5.0.0(@types/node@22.20.2)(vite@7.3.6(@types/node@22.20.2))
 
+  packages/market-stream:
+    dependencies:
+      '@nemesis-oss/market-data':
+        specifier: workspace:*
+        version: link:../market-data
+      '@nemesis-oss/market-events':
+        specifier: workspace:*
+        version: link:../market-events
+      '@nemesis-oss/market-research':
+        specifier: workspace:*
+        version: link:../market-research
+      decimal.js:
+        specifier: ^10.4.3
+        version: 10.6.0
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.0
+        version: 22.20.2
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@22.20.2)
+
   packages/research-agent:
     dependencies:
       '@nemesis-oss/agentic-runtime':

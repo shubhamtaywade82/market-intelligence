@@ -4,7 +4,7 @@ This document tracks the evolution from the current research library (4 packages
 toward a full market intelligence platform. Each item has a priority, estimated
 effort, and dependencies on prior items.
 
-## Current state (v0.1)
+## Current state (v0.2)
 
 ```
 @nemesis-oss/agentic-runtime
@@ -14,6 +14,10 @@ effort, and dependencies on prior items.
           ┌───┴────┐
           ▼        ▼
  market-events  market-research      ← deterministic engines
+                                    │
+              ┌─────────────────────┤
+              ▼                     ▼
+        market-data            market-stream    ← live intelligence
 ```
 
 | Package | Status | Tests |
@@ -22,8 +26,9 @@ effort, and dependencies on prior items.
 | `market-research` | ✅ complete | 55 |
 | `research-agent` | ✅ complete (9 tools, E2E test) | 18 |
 | `market-data` | ✅ v0.1 (Binance REST+WS, Bybit REST) | 9 |
+| `market-stream` | ✅ v0.1 (live MarketState, multi-stream) | 12 |
 
-**Total: 108 tests passing.**
+**Total: 120 tests passing.**
 
 ---
 
@@ -38,26 +43,16 @@ mark price). `createResearchAgentFromExchange()` convenience in research-agent.
 **Next:** Bybit WebSocket adapter. CoinDCX adapter. Liquidation feed. Depth/order
 book streaming. Trades stream.
 
-### ⬜ 2. Live Market Intelligence — `packages/market-stream/`
+### ✅ 2. Live Market Intelligence — `packages/market-stream/` (DONE)
 
-**Priority:** High. **Effort:** 2–3 weeks. **Depends on:** #1.
+**Status:** v0.1 shipped. Continuously maintained `MarketState` from exchange
+WebSocket feeds: price, trend regime, volatility regime, ATR, session, active
+events (FVG, BOS, CHoCH, MSS, order blocks, liquidity sweeps, displacement).
+Multi-symbol/multi-timeframe orchestration with per-stream rolling candle
+buffers, timestamp deduplication, and backpressure-safe synchronous processing.
 
-Continuously maintained market state from exchange WebSocket feeds:
-
-```
-Exchange WebSocket → market-stream → canonical event stream → market-events → real-time intelligence
-```
-
-Answers "What is happening to SOLUSDT *right now*?" rather than only
-"What historically happened in my dataset?"
-
-**Deliverables:**
-- `MarketState` continuously maintained object (price, trend, volatility, regime,
-  structure, liquidity, displacement, OI, funding, taker flow, volume profile,
-  sessions, active events).
-- Stream orchestration: subscribe to multiple exchanges/symbols, deduplicate,
-  normalize timestamps.
-- Backpressure handling: drop-in-progress candles, never block the event loop.
+**Next:** Higher-timeframe state aggregation. Cross-stream event correlation.
+Market-state snapshot persistence.
 
 ### ⬜ 3. Real-Time Market State — `packages/market-state/`
 
