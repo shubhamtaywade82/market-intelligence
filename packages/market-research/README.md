@@ -8,15 +8,15 @@ Empirical market event research, trajectory evaluation, counterfactual controls,
 
 | Module | Source | Description |
 | :--- | :--- | :--- |
-| **Outcomes & Trajectories** | [`generic-outcomes.ts`](file:///home/nemesis/projects/quant-libraries/market-intelligence/packages/market-research/src/generic-outcomes.ts) | Pure trajectory evaluation: MFE/MAE in ATR, `reached1R/2R/3R`, `timeTo1R/2R/3R`, collision resolution, and authoritative `OutcomeLabel`. |
-| **Matched Controls** | [`matched-controls.ts`](file:///home/nemesis/projects/quant-libraries/market-intelligence/packages/market-research/src/matched-controls.ts) | Synthetic counterfactual baselines matched on trend regime, volatility, and session. |
-| **Episode Clustering** | [`episode-clustering.ts`](file:///home/nemesis/projects/quant-libraries/market-intelligence/packages/market-research/src/episode-clustering.ts) | Resolves autocorrelation by clustering temporally adjacent events into independent episodes. |
-| **Statistical Significance** | [`statistical-significance.ts`](file:///home/nemesis/projects/quant-libraries/market-intelligence/packages/market-research/src/statistical-significance.ts) | Wilson score intervals, Bootstrap median CIs, Cluster-level bootstrap, and Paired bootstrap comparison. |
-| **Multiple Testing** | [`multiple-testing.ts`](file:///home/nemesis/projects/quant-libraries/market-intelligence/packages/market-research/src/multiple-testing.ts) | Benjamini-Hochberg (FDR) and Holm-Bonferroni (FWER) adjustments, plus hypothesis family management. |
-| **Condition Engine** | [`condition-engine.ts`](file:///home/nemesis/projects/quant-libraries/market-intelligence/packages/market-research/src/condition-engine.ts) | Type-safe predictive filter expressions preventing ex-post outcome leakage. |
-| **Equivalence Testing** | [`equivalence-research.ts`](file:///home/nemesis/projects/quant-libraries/market-intelligence/packages/market-research/src/equivalence-research.ts) | Two One-Sided Tests (TOST) to verify whether two event definitions capture equivalent market behavior. |
-| **Walk-Forward Validation** | [`walk-forward.ts`](file:///home/nemesis/projects/quant-libraries/market-intelligence/packages/market-research/src/walk-forward.ts) | Out-of-sample validation with rolling purged train/test windows and continuous warmup history. |
-| **Study Runner** | [`study-runner.ts`](file:///home/nemesis/projects/quant-libraries/market-intelligence/packages/market-research/src/study-runner.ts) | Orchestrates end-to-end component evaluations across 7 core event types with full SHA-256 provenance. |
+| **Outcomes & Trajectories** | [`generic-outcomes.ts`](src/generic-outcomes.ts) | Pure trajectory evaluation: MFE/MAE in ATR, `reached1R/2R/3R`, `timeTo1R/2R/3R`, collision resolution, and authoritative `OutcomeLabel`. |
+| **Matched Controls** | [`matched-controls.ts`](src/matched-controls.ts) | Synthetic counterfactual baselines matched on trend regime, volatility, and session. |
+| **Episode Clustering** | [`episode-clustering.ts`](src/episode-clustering.ts) | Resolves autocorrelation by clustering temporally adjacent events into independent episodes. |
+| **Statistical Significance** | [`statistical-significance.ts`](src/statistical-significance.ts) | Wilson score intervals, Bootstrap median CIs, Cluster-level bootstrap, and Paired bootstrap comparison. |
+| **Multiple Testing** | [`multiple-testing.ts`](src/multiple-testing.ts) | Benjamini-Hochberg (FDR) and Holm-Bonferroni (FWER) adjustments, plus hypothesis family management. |
+| **Condition Engine** | [`condition-engine.ts`](src/condition-engine.ts) | Type-safe predictive filter expressions preventing ex-post outcome leakage. |
+| **Equivalence Testing** | [`equivalence-research.ts`](src/equivalence-research.ts) | Two One-Sided Tests (TOST) to verify whether two event definitions capture equivalent market behavior. |
+| **Walk-Forward Validation** | [`walk-forward.ts`](src/walk-forward.ts) | Out-of-sample validation with rolling purged train/test windows and continuous warmup history. |
+| **Study Runner** | [`study-runner.ts`](src/study-runner.ts) | Orchestrates end-to-end component evaluations across 7 core event types with full SHA-256 provenance. |
 
 ---
 

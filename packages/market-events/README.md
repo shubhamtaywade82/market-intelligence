@@ -26,13 +26,13 @@ All detectors are pure, deterministic functions operating on immutable `Candle[]
 
 ## Causal Lifecycle Model
 
-Every event produces an [`EventTimeline`](file:///home/nemesis/projects/quant-libraries/market-intelligence/packages/market-events/src/types.ts) enforcing:
+Every event produces an [`EventTimeline`](src/types.ts) enforcing:
 
 $$\text{originIndex} \le \text{formedAtIndex} \le \text{confirmedAtIndex} \le \text{availableAtIndex}$$
 
 * `originIndex` / `originTimestamp`: Candle where pattern began.
 * `availableAtIndex` / `availableAtTimestamp`: Earliest candle where event was causally observable.
-* Call [`validateEventCausality(event)`](file:///home/nemesis/projects/quant-libraries/market-intelligence/packages/market-events/src/types.ts) to verify invariant satisfaction.
+* Call [`validateEventCausality(event)`](src/types.ts) to verify invariant satisfaction.
 
 ---
 
