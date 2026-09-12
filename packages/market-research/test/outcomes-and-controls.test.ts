@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { Decimal } from 'decimal.js';
-import type { Candle, FvgEvent, OrderBlockEvent, StructureBreakEvent, LiquiditySweepEvent } from '@nemesis-oss/market-events';
+import type { Candle, FvgEvent, OrderBlockEvent } from '@nemesis-oss/market-events';
 import {
   evaluateFvgOutcome,
   evaluateOrderBlockOutcome,
-  evaluateStructureOutcome,
-  evaluateLiquiditySweepOutcome,
   evaluateGenericOutcome
 } from '../src/outcome-evaluators.js';
 import { generateMatchedControls } from '../src/matched-controls.js';

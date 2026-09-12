@@ -4,7 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { downloadPaginatedKlines } from '../src/data/paginated-downloader.js';
 import { saveDataset, loadDataset } from '../src/data/dataset-store.js';
-import type { KlineDataSource, RawKlineRecord } from '../src/data/types.js';
+import type { KlineDataSource } from '../src/data/types.js';
 
 describe('Historical Data Pipeline', () => {
   it('downloads klines across multiple pages and sanitizes them', async () => {

@@ -1,4 +1,4 @@
-import type { Candle, Timeframe } from './types.js';
+import type { Timeframe } from './types.js';
 
 export type SessionName = 'asia' | 'london' | 'new_york';
 

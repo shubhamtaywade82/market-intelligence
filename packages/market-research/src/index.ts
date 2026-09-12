@@ -16,5 +16,4 @@ export * from './calibration.js';
 export * from './condition-engine.js';
 export * from './multiple-testing.js';
 export * from './negative-evidence.js';
-export * from './cli.js';
 export * from './data/index.js';

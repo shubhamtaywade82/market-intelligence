@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { Decimal } from 'decimal.js';
 import type { Candle, Timeframe, BaseEvent } from '@nemesis-oss/market-events';
 import { detectFvg, detectSwings, detectStructureBreaks, detectBos, detectChoch, detectMss, detectOrderBlocks, detectLiquiditySweeps, detectDisplacement } from '@nemesis-oss/market-events';
 import { evaluateEventOutcome, DEFAULT_OUTCOME_CONFIG } from './outcome-evaluators.js';
