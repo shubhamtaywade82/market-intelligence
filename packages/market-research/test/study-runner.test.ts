@@ -73,7 +73,7 @@ describe('Study Runner & Context Features', () => {
       horizonCandles: 3
     });
 
-    expect(study.results.length).toBe(7);
+    expect(study.results.length).toBe(8);
     expect(study.observations.length).toBeGreaterThanOrEqual(1);
 
     const firstObs = study.observations[0]!;
