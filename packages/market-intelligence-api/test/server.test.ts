@@ -92,7 +92,7 @@ describe('market-intelligence-api / server', () => {
     expect(status).toBe(404);
   });
 
-  it('returns 405 for non-GET methods', async () => {
+  it('returns 405 with Allow header for non-GET/HEAD methods', async () => {
     const server = createApiServer({ port: 0 });
     servers.push(server);
     await new Promise<void>((resolve) =>
@@ -103,6 +103,31 @@ describe('market-intelligence-api / server', () => {
     const port = (address as { port: number }).port;
     const res = await fetch(`http://127.0.0.1:${port}/health`, { method: 'POST' });
     expect(res.status).toBe(405);
+    expect(res.headers.get('allow')).toBe('GET, HEAD, OPTIONS');
+  });
+
+  it('answers HEAD like GET: 200, same headers, no body', async () => {
+    const server = await listen(createApiServer({ port: 0 }));
+    servers.push(server);
+
+    const getRes = await fetchRaw(server, '/health');
+    const getBody = await getRes.text();
+    const headRes = await fetchRaw(server, '/health', { method: 'HEAD' });
+    const headBody = await headRes.text();
+
+    expect(headRes.status).toBe(200);
+    expect(headBody).toBe('');
+    // Content-Length reflects the GET representation (RFC 9110 §9.3.2).
+    expect(headRes.headers.get('content-length')).toBe(
+      getRes.headers.get('content-length'),
+    );
+    expect(headRes.headers.get('content-length')).toBe(String(getBody.length));
+    // Hardening + correlation headers still present on HEAD responses.
+    expect(headRes.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(headRes.headers.get('x-ratelimit-limit')).toBeTruthy();
+    expect(headRes.headers.get('x-request-id')).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
   });
 
   it('sets security and correlation headers on every response', async () => {

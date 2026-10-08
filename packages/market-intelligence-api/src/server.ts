@@ -151,8 +151,8 @@ export class RateLimiter {
  * Minimal HTTP API server that exposes the market intelligence platform.
  *
  * Endpoints:
- *  GET /health           — health check
- *  GET /markets          — list active market streams
+ *  GET  /health           — health check (HEAD also supported, body omitted)
+ *  GET  /markets          — list active market streams
  *  GET /state/:symbol/:timeframe — current MarketState for a stream
  *  GET /events           — all active events across all streams
  *  GET /strategies       — all registered strategies
@@ -199,7 +199,7 @@ export function createApiServer(options: ApiServerOptions = {}): Server {
     if (corsOrigin !== undefined) {
       res.setHeader('Access-Control-Allow-Origin', corsOrigin);
       res.setHeader('Vary', 'Origin');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
       res.setHeader('Access-Control-Max-Age', '600');
     }
@@ -241,8 +241,13 @@ export function createApiServer(options: ApiServerOptions = {}): Server {
         return;
       }
 
-      if (req.method !== 'GET') {
+      // HEAD is routed like GET (RFC 9110: identical to GET minus the body).
+      // Node's http server discards body writes for HEAD responses, so route
+      // handlers stay untouched — clients receive the correct headers and
+      // Content-Length. Load balancers and uptime probes rely on this.
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
         finish(405);
+        res.setHeader('Allow', 'GET, HEAD, OPTIONS');
         sendJson(res, 405, { error: 'Method not allowed', requestId });
         return;
       }
