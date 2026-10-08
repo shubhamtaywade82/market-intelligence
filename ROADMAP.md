@@ -39,23 +39,23 @@ an HTTP API.
 
 | Package | Status | Tests |
 | :--- | :--- | :---: |
-| `market-events` | ✅ complete | 21 |
-| `market-research` | ✅ complete | 55 |
-| `research-agent` | ✅ complete (9 tools, E2E test) | 18 |
-| `market-data` | ✅ v0.1 (Binance REST+WS, Bybit REST) | 9 |
+| `market-events` | ✅ complete | 20 |
+| `market-research` | ✅ complete | 72 |
+| `research-agent` | ✅ complete (9 tools, E2E test) | 20 |
+| `market-data` | ✅ v0.1 (Binance REST+WS, Bybit REST) | 10 |
 | `market-stream` | ✅ v0.1 (live MarketState) | 12 |
 | `market-state` | ✅ v0.1 (aggregated cross-symbol) | 5 |
-| `regime-engine` | ✅ v0.1 (composite regime) | 7 |
+| `regime-engine` | ✅ v0.1 (composite regime) | 8 |
 | `market-features` | ✅ v0.1 (price/volume/microstructure/derivatives) | 7 |
 | `event-graph` | ✅ v0.1 (multi-event patterns) | 6 |
 | `hypothesis-engine` | ✅ v0.1 (LLM→test→WFO→verdict) | 5 |
 | `strategy-discovery` | ✅ v0.1 (candidate generation) | 4 |
 | `strategy-registry` | ✅ v0.1 (lifecycle management) | 8 |
-| `research-memory` | ✅ v0.1 (persistent domain memory) | 6 |
+| `research-memory` | ✅ v0.1 (persistent domain memory) | 7 |
 | `negative-evidence-system` | ✅ v0.1 (evidence balance) | 3 |
-| `market-intelligence-api` | ✅ v0.1 (HTTP server) | 5 |
+| `market-intelligence-api` | ✅ v0.1 (hardened HTTP server: rate limit, security headers, graceful shutdown, HEAD support) | 17 |
 
-**Total: 203 tests passing across 15 packages.**
+**Total: 204 tests passing across 15 packages** (+2 integration tests auto-skipped without a local Ollama).
 
 ---
 
