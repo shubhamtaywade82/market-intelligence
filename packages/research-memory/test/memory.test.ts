@@ -120,7 +120,7 @@ describe('research-memory / ResearchMemory', () => {
     const mem = createResearchMemory();
     mem.recordExperiment({
       id: 'exp-1',
-      hypothesis: makeHypothesis('h1'),
+      hypothesis: makeHypothesis('h1', 'SOLUSDT'),
       result: makeResult('validated'),
       createdAt: Date.now(),
     });
@@ -138,7 +138,7 @@ describe('research-memory / ResearchMemory', () => {
   it('computes deterministic dataset hashes', () => {
     const h1 = computeDatasetHash('ETHUSDT', '15m', 500, 1, 2);
     const h2 = computeDatasetHash('ETHUSDT', '15m', 500, 1, 2);
-    const h3 = computeDatasetHash('ETHUSDT', '15m', 500, 1, 2);
+    const h3 = computeDatasetHash('ETHUSDT', '15m', 500, 1, 3);
     expect(h1).toBe(h2);
     expect(h1).not.toBe(h3);
   });

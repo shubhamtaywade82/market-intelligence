@@ -1,0 +1,47 @@
+# market-intelligence API — local orchestration
+#
+# Usage:
+#   cp .env.example .env      # adjust values
+#   docker compose up --build
+#
+# The API exposes a read-only HTTP surface. In simulated mode it generates a
+# synthetic candle stream, so the stack is fully functional offline.
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: market-intelligence-api:latest
+    container_name: market-intelligence-api
+    init: true # proper PID 1 signal handling / zombie reaping
+    restart: unless-stopped
+    ports:
+      - '${PORT:-8080}:8080'
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+      HOST: 0.0.0.0
+      DATA_MODE: ${DATA_MODE:-simulated}
+      MARKET_SYMBOLS: ${MARKET_SYMBOLS:-ETHUSDT,BTCUSDT}
+      MARKET_TIMEFRAMES: ${MARKET_TIMEFRAMES:-15m}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:8080/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    # Conservative resource guards — tune for your host.
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'

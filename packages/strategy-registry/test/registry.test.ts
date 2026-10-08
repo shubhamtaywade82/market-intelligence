@@ -97,13 +97,15 @@ describe('strategy-registry / StrategyRegistry', () => {
     const reg = createStrategyRegistry();
     reg.register(makeCandidate('s1', 'ETHUSDT'));
     reg.register(makeCandidate('s2', 'ETHUSDT'));
-    reg.register(makeCandidate('s3', 'ETHUSDT'));
+    reg.register(makeCandidate('s3', 'BTCUSDT'));
 
     const active = reg.byStatus('DISCOVERED');
     expect(active.length).toBe(3);
 
-    const btc = reg.bySymbol('ETHUSDT');
-    expect(btc.length).toBe(2);
+    const eth = reg.bySymbol('ETHUSDT');
+    expect(eth.length).toBe(2);
+    const btc = reg.bySymbol('BTCUSDT');
+    expect(btc.length).toBe(1);
   });
 
   it('updates metrics', () => {

@@ -55,7 +55,7 @@ an HTTP API.
 | `negative-evidence-system` | ✅ v0.1 (evidence balance) | 3 |
 | `market-intelligence-api` | ✅ v0.1 (HTTP server) | 5 |
 
-**Total: 178 tests passing across 15 packages.**
+**Total: 203 tests passing across 15 packages.**
 
 ---
 

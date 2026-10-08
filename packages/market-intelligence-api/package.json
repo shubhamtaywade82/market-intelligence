@@ -6,8 +6,15 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
-  "scripts": { "build": "tsc", "typecheck": "tsc --noEmit", "test": "vitest run" },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "start": "node dist/main.js",
+    "start:dev": "tsx src/main.ts"
+  },
   "dependencies": {
+    "decimal.js": "^10.4.3",
     "@nemesis-oss/market-events": "workspace:*",
     "@nemesis-oss/market-research": "workspace:*",
     "@nemesis-oss/market-data": "workspace:*",
