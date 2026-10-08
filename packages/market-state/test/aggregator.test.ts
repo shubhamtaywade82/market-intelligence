@@ -38,7 +38,7 @@ describe('market-state / aggregateMarketState', () => {
   it('computes market breadth across multiple symbols', () => {
     const streams = new Map<string, StreamMarketState>([
       ['ETHUSDT:15m', makeState('ETHUSDT', 'bullish', 3)],
-      ['ETHUSDT:15m', makeState('ETHUSDT', 'bullish', 1)],
+      ['BTCUSDT:15m', makeState('BTCUSDT', 'bullish', 1)],
       ['SOLUSDT:15m', makeState('SOLUSDT', 'bearish', 2)],
       ['XRPUSDT:15m', makeState('XRPUSDT', 'range', 0)],
     ]);
@@ -55,7 +55,7 @@ describe('market-state / aggregateMarketState', () => {
   it('collects all events across streams, sorted newest-first', () => {
     const streams = new Map<string, StreamMarketState>([
       ['ETHUSDT:15m', makeState('ETHUSDT', 'bullish', 2)],
-      ['ETHUSDT:15m', makeState('ETHUSDT', 'bearish', 1)],
+      ['BTCUSDT:15m', makeState('BTCUSDT', 'bearish', 1)],
     ]);
 
     const agg = aggregateMarketState(streams);
@@ -74,7 +74,7 @@ describe('market-state / aggregateMarketState', () => {
   it('ranks hot symbols by event count', () => {
     const streams = new Map<string, StreamMarketState>([
       ['ETHUSDT:15m', makeState('ETHUSDT', 'bullish', 5)],
-      ['ETHUSDT:15m', makeState('ETHUSDT', 'bullish', 3)],
+      ['BTCUSDT:15m', makeState('BTCUSDT', 'bullish', 3)],
       ['SOLUSDT:15m', makeState('SOLUSDT', 'bearish', 8)],
       ['XRPUSDT:15m', makeState('XRPUSDT', 'range', 0)],
     ]);

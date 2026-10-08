@@ -86,9 +86,11 @@ The agentic layer exposes deterministic tools to the model — every statistic i
 ```bash
 # Requires Node.js >= 20 and pnpm 9.x (pinned via packageManager field).
 pnpm install
-pnpm run build      # builds all 3 workspace packages in topological order
-pnpm run test       # 97 tests across the monorepo
+pnpm run build      # builds all 15 workspace packages in topological order
+pnpm run test       # 203 tests across the monorepo
 pnpm run typecheck  # type-checks every package (requires build first)
+pnpm run lint       # eslint across all packages
+pnpm run format     # prettier across all packages
 ```
 
 ### Detecting Events (`market-events`)
@@ -183,7 +185,7 @@ const stream = createMarketStream(
     adapter: createBinanceAdapter(),
     streams: [
       { symbol: 'ETHUSDT', timeframe: '15m' },
-      { symbol: 'ETHUSDT', timeframe: '15m' },
+      { symbol: 'SOLUSDT', timeframe: '15m' },
     ],
     detectors: ['fvg', 'bos', 'liquidity_sweep'],
     eventLookbackBars: 10,
@@ -249,12 +251,70 @@ GitHub Actions workflows live in [`.github/workflows/`](.github/workflows/):
 
 | Workflow | Trigger | Purpose |
 | :--- | :--- | :--- |
-| [`ci.yml`](.github/workflows/ci.yml) | push to `main`, PRs to `main` | Node 20 + 22 matrix: `install → build → test`. Uploads `dist/` artifacts. Build runs before test because workspace packages resolve each other via `types` in `package.json`. |
+| [`ci.yml`](.github/workflows/ci.yml) | push to `main`, PRs to `main` | Node 20 + 22 matrix: `install → lint → build → test`. Uploads `dist/` artifacts. Build runs before test because workspace packages resolve each other via `types` in `package.json`. |
+| [`docker.yml`](.github/workflows/docker.yml) | push to `main`, PRs touching image/API | Builds the production Docker image (with GHA layer cache) and runs an in-container smoke test: `/health` readiness, security-header assertions, and graceful SIGTERM shutdown. |
+| [`release.yml`](.github/workflows/release.yml) | `v*.*.*` tags | Full build + test, then a GitHub Release with per-package `dist` tarballs and generated release notes. |
 | [`codeql.yml`](.github/workflows/codeql.yml) | push to `main`, PRs to `main`, weekly cron | JS/TS security analysis (prototype pollution, regex DoS, SSRF, command injection). Relevant because downstream `crypto-agent` ingests untrusted exchange data. |
 
 [Dependabot](.github/dependabot.yml) opens weekly grouped PRs for npm and GitHub Actions. Major-version bumps to `@types/node`, `zod`, `typescript`, `@nemesis-oss/agentic-runtime`, and `@nemesis-oss/ollama-sdk` are pinned and require manual review — these track runtime/peer-dep constraints that auto-bumping would violate.
 
-No release workflow yet. It will be added when `@nemesis-oss/market-research-agent` is published to npm.
+npm publishing is intentionally not wired up yet; `release.yml` ships compiled artifacts on GitHub Releases and can be extended with an npm publish step when the packages go public.
+
+---
+
+## Production Deployment
+
+The HTTP API ([`@nemesis-oss/market-intelligence-api`](packages/market-intelligence-api)) ships as a hardened, container-ready service.
+
+### Production hardening (built in)
+
+- **Rate limiting** — dependency-free sliding-window limiter per client IP (`429` + `Retry-After` + `X-RateLimit-*` headers). Preflight `OPTIONS` requests are never limited.
+- **Security headers** — `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Strict-Transport-Security`, and a lock-down `Content-Security-Policy` on every response.
+- **Request timeouts** — `headersTimeout` (10s), `requestTimeout` (30s), `keepAliveTimeout` (5s): no request can hang the server.
+- **Graceful shutdown** — SIGTERM/SIGINT drain sequence: stop the market stream → stop accepting connections → close idle sockets → force-close survivors after 10s. Safe for rolling deploys.
+- **Correlation IDs** — `X-Request-Id` (UUID) on every response, echoed in error bodies and logs.
+- **Structured logging** — single-line JSON to stdout (`LOG_LEVEL` controlled), container/collector friendly.
+- **Configurable CORS** — default `*` for public read-only data; restrict with `CORS_ORIGIN=https://app.example.com`.
+
+### Run with Docker
+
+```bash
+cp .env.example .env        # optional: adjust ports/symbols/limits
+docker compose up --build   # builds image, starts API on :8080
+curl http://localhost:8080/health
+```
+
+The image is a multi-stage build: compile in a builder stage, then run as a **non-root user** with only production dependencies and a container `HEALTHCHECK`. Simulated market data works with zero exchange connectivity — flip `DATA_MODE` when wiring a live adapter.
+
+### Run without Docker
+
+```bash
+pnpm run build
+pnpm --filter @nemesis-oss/market-intelligence-api start   # node dist/main.js
+# or with hot reload:
+pnpm api                                                    # tsx src/main.ts
+```
+
+All runtime settings are environment-driven — see [`.env.example`](.env.example) for the full list (`PORT`, `HOST`, `CORS_ORIGIN`, `RATE_LIMIT_MAX_REQUESTS`, `RATE_LIMIT_WINDOW_MS`, `DATA_MODE`, `MARKET_SYMBOLS`, `MARKET_TIMEFRAMES`, `LOG_LEVEL`).
+
+### Embedding the server
+
+The server is a library first — hardening is opt-in via `ApiServerOptions`:
+
+```typescript
+import { startApiServer, stopApiServer } from '@nemesis-oss/market-intelligence-api';
+
+const server = await startApiServer({
+  port: 8080,
+  stream, registry, memory,
+  cors: { origin: ['https://app.example.com'] },
+  rateLimit: { maxRequests: 60, windowMs: 60_000 },
+  logger: (r) => console.log(JSON.stringify(r)),
+});
+
+// Graceful drain on shutdown:
+process.on('SIGTERM', () => stopApiServer(server));
+```
 
 ---
 
@@ -262,8 +322,15 @@ No release workflow yet. It will be added when `@nemesis-oss/market-research-age
 
 - [Architecture & Methodology Guide](docs/architecture.md)
 - [Roadmap: market intelligence platform](ROADMAP.md)
+- [Contributing guide](CONTRIBUTING.md) — development workflow and code standards
 - [`market-data` README](packages/market-data/README.md) — exchange adapters
 - [`market-stream` README](packages/market-stream/README.md) — live market intelligence
 - [`market-events` README](packages/market-events/README.md)
 - [`market-research` README](packages/market-research/README.md)
 - [`research-agent` README](packages/research-agent/README.md) — including integration with `crypto-agent`
+
+---
+
+## License
+
+[MIT](LICENSE) © Shubham Taywade

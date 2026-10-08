@@ -15,7 +15,12 @@
     "live-study": "pnpm --filter @nemesis-oss/market-research live-study",
     "research": "pnpm --filter @nemesis-oss/market-research-agent cli",
     "tui": "pnpm --filter @nemesis-oss/demo-runner tui",
-    "lint": "eslint packages"
+    "api": "pnpm --filter @nemesis-oss/market-intelligence-api start:dev",
+    "lint": "eslint packages",
+    "lint:fix": "eslint packages --fix",
+    "format": "prettier --write \"packages/*/src/**/*.ts\" \"packages/*/test/**/*.ts\"",
+    "format:check": "prettier --check \"packages/*/src/**/*.ts\" \"packages/*/test/**/*.ts\"",
+    "clean": "pnpm -r exec rm -rf dist *.tsbuildinfo || true"
   },
   "devDependencies": {
     "@types/node": "^22.13.0",
@@ -23,6 +28,7 @@
     "@typescript-eslint/parser": "^7.18.0",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.4.2",
     "tsx": "^4.23.13",
     "typescript": "^5.7.3",
     "vitest": "^5.0.0"

@@ -1,0 +1,60 @@
+name: Release
+
+# Builds a versioned GitHub Release with compiled artifacts whenever a
+# version tag (v*) is pushed. npm publishing is intentionally NOT wired up
+# yet — packages remain private until the API surface stabilizes; when that
+# changes, add an npm publish step gated on NPM_TOKEN.
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write # required to create the GitHub Release
+
+jobs:
+  release:
+    name: build · test · release (Node 22)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 9.15.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm -r build
+
+      - name: Test
+        run: pnpm test
+
+      - name: Package dist artifacts
+        run: |
+          mkdir -p release
+          for pkg in packages/*/; do
+            name=$(node -p "require('./${pkg}package.json').name" 2>/dev/null || basename "${pkg}")
+            if [ -d "${pkg}dist" ]; then
+              tar -czf "release/${name#*@}-dist.tar.gz" -C "${pkg}" dist
+            fi
+          done
+          ls -la release/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: release/*.tar.gz

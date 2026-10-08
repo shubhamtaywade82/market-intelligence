@@ -99,7 +99,7 @@ async function main() {
       adapter,
       streams: [
         { symbol: 'ETHUSDT', timeframe: '15m' },
-        { symbol: 'ETHUSDT', timeframe: '15m' },
+        { symbol: 'SOLUSDT', timeframe: '15m' },
       ],
       detectors: ['fvg', 'bos', 'liquidity_sweep'],
       eventLookbackBars: 10,

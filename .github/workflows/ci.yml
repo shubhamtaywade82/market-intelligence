@@ -45,6 +45,11 @@ jobs:
       - name: Install (frozen lockfile)
         run: pnpm install --frozen-lockfile
 
+      # Lint runs before build: it catches dead code, unsafe `any` usage,
+      # and unused imports without needing compiled types.
+      - name: Lint
+        run: pnpm run lint
+
       # Build MUST run before test/typecheck in this monorepo because
       # workspace packages reference each other via the `types` field in
       # their package.json (which points to dist/*.d.ts). Without a prior

@@ -1,0 +1,20 @@
+# Files excluded from the Docker build context.
+# Keeps images small and builds fast (no test fixtures, git history, caches).
+
+.git
+.github
+node_modules
+**/node_modules
+dist
+**/dist
+*.tsbuildinfo
+coverage
+.datasets
+.env
+.env.*
+!.env.example
+.DS_Store
+docs
+RESULT.md
+ROADMAP.md
+*.log

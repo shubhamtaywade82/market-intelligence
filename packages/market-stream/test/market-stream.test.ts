@@ -284,14 +284,14 @@ describe('market-stream / createMarketStream', () => {
       {
         adapter,
         streams: [
-          { symbol: 'ETHUSDT', timeframe: '15m' },
+          { symbol: 'BTCUSDT', timeframe: '15m' },
           { symbol: 'ETHUSDT', timeframe: '15m' },
         ],
         detectors: null,
       },
       {
         onState: (s) => {
-          if (s.symbol === 'ETHUSDT') btcStates.push(1);
+          if (s.symbol === 'BTCUSDT') btcStates.push(1);
           if (s.symbol === 'ETHUSDT') ethStates.push(1);
         },
       },
@@ -301,7 +301,7 @@ describe('market-stream / createMarketStream', () => {
 
     // Push only BTC candles.
     for (let i = 0; i < 5; i++) {
-      pushCandle('ETHUSDT', '15m', makeCandle(i, 100));
+      pushCandle('BTCUSDT', '15m', makeCandle(i, 100));
     }
 
     expect(btcStates.length).toBe(4); // first candle doesn't produce state
