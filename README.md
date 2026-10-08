@@ -87,7 +87,7 @@ The agentic layer exposes deterministic tools to the model — every statistic i
 # Requires Node.js >= 20 and pnpm 9.x (pinned via packageManager field).
 pnpm install
 pnpm run build      # builds all 15 workspace packages in topological order
-pnpm run test       # 203 tests across the monorepo
+pnpm run test       # 204 tests across the monorepo
 pnpm run typecheck  # type-checks every package (requires build first)
 pnpm run lint       # eslint across all packages
 pnpm run format     # prettier across all packages
@@ -269,6 +269,7 @@ The HTTP API ([`@nemesis-oss/market-intelligence-api`](packages/market-intellige
 ### Production hardening (built in)
 
 - **Rate limiting** — dependency-free sliding-window limiter per client IP (`429` + `Retry-After` + `X-RateLimit-*` headers). Preflight `OPTIONS` requests are never limited.
+- **HEAD support** — every `GET` route answers `HEAD` too (RFC 9110 §9.3.2): same status and headers, no body. Load balancers, uptime probes, and `curl -I` health checks work out of the box; `405` responses advertise `Allow: GET, HEAD, OPTIONS`.
 - **Security headers** — `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Strict-Transport-Security`, and a lock-down `Content-Security-Policy` on every response.
 - **Request timeouts** — `headersTimeout` (10s), `requestTimeout` (30s), `keepAliveTimeout` (5s): no request can hang the server.
 - **Graceful shutdown** — SIGTERM/SIGINT drain sequence: stop the market stream → stop accepting connections → close idle sockets → force-close survivors after 10s. Safe for rolling deploys.
